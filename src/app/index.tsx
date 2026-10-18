@@ -94,7 +94,7 @@ function Home() {
   const map = (
     <View style={styles.mapWrap} onLayout={(e) => setMapHeight(e.nativeEvent.layout.height - 20)}>
       <CityMap
-        items={events}
+        items={walk ? [] : events} // while a walk is shown, only its stops are on the map
         walk={walk}
         selectedId={selected?.item.id ?? null}
         userLocation={location}
