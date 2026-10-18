@@ -26,6 +26,7 @@ function SharedWalk() {
   const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [selected, setSelected] = useState<{ item: MapItem; note: string | null } | null>(null);
   const [focusKey, setFocusKey] = useState(0);
+  const [mapHeight, setMapHeight] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (!id) return;
@@ -60,7 +61,7 @@ function SharedWalk() {
     <SafeAreaView style={styles.screen}>
       <Header />
       <View style={{ flex: 1, flexDirection: wide ? "row" : "column" }}>
-        <View style={{ flex: 1, backgroundColor: colors.grass }}>
+        <View style={{ flex: 1, backgroundColor: colors.grass }} onLayout={(e) => setMapHeight(e.nativeEvent.layout.height - 20)}>
           <CityMap
             items={[]}
             walk={walk}
@@ -71,8 +72,8 @@ function SharedWalk() {
             onBoundsChange={() => undefined}
           />
           {selected ? (
-            <View style={styles.sheetWrap}>
-              <ItemSheet item={selected.item} note={selected.note} onClose={() => setSelected(null)} />
+            <View style={styles.sheetWrap} pointerEvents="box-none">
+              <ItemSheet item={selected.item} note={selected.note} onClose={() => setSelected(null)} maxHeight={mapHeight} />
             </View>
           ) : null}
         </View>

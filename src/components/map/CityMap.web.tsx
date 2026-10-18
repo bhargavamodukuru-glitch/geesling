@@ -71,6 +71,11 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
         zoomControl
         clickableIcons={false}
         onClick={() => onSelect(null)}
+        // onCameraChanged only fires on movement; idle also fires once the map first renders.
+        onIdle={(event) => {
+          const b = event.map.getBounds()?.toJSON();
+          if (b) onBoundsChange({ minLat: b.south, maxLat: b.north, minLng: b.west, maxLng: b.east });
+        }}
         onCameraChanged={(event) => {
           const b = event.detail.bounds;
           onBoundsChange({ minLat: b.south, maxLat: b.north, minLng: b.west, maxLng: b.east });

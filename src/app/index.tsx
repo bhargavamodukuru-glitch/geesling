@@ -39,6 +39,7 @@ function Home() {
   const [walk, setWalk] = useState<Walk | null>(null);
   const [focusKey, setFocusKey] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
+  const [mapHeight, setMapHeight] = useState<number | undefined>(undefined);
 
   // Debounce map movement so panning doesn't spam the database.
   const boundsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,7 +92,7 @@ function Home() {
   }, [walk]);
 
   const map = (
-    <View style={styles.mapWrap}>
+    <View style={styles.mapWrap} onLayout={(e) => setMapHeight(e.nativeEvent.layout.height - 20)}>
       <CityMap
         items={events}
         walk={walk}
@@ -111,7 +112,7 @@ function Home() {
       ) : null}
       {selected ? (
         <View style={styles.sheetWrap} pointerEvents="box-none">
-          <ItemSheet item={selected.item} note={selected.note} onClose={() => setSelected(null)} />
+          <ItemSheet item={selected.item} note={selected.note} onClose={() => setSelected(null)} maxHeight={mapHeight} />
         </View>
       ) : null}
     </View>

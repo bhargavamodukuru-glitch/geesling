@@ -17,9 +17,10 @@ interface Props {
   item: MapItem;
   note?: string | null; // Geesling's "why" when the item is part of a walk
   onClose: () => void;
+  maxHeight?: number; // space available above the bottom of the map
 }
 
-export function ItemSheet({ item, note, onClose }: Props) {
+export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
   const { isSaved, toggle } = useSaved();
   const saved = isSaved(item.kind, item.id);
   const free = item.is_free;
@@ -27,7 +28,7 @@ export function ItemSheet({ item, note, onClose }: Props) {
   const link = item.kind === "event" ? (item.ticket_url ?? item.url) : (item.website ?? item.maps_url);
 
   return (
-    <Panel style={styles.sheet} shadow={5}>
+    <Panel style={[styles.sheet, maxHeight !== undefined && { maxHeight: Math.max(160, maxHeight) }]} shadow={5}>
       <View style={styles.header}>
         <View style={{ flex: 1, gap: 4 }}>
           <View style={styles.tags}>
@@ -44,7 +45,7 @@ export function ItemSheet({ item, note, onClose }: Props) {
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={{ gap: 8 }}>
-        {item.kind === "event" && item.image_url ? <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" /> : null}
+        {item.kind === "event" && item.image_url && (maxHeight === undefined || maxHeight > 420) ? <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" /> : null}
 
         {note ? (
           <View style={styles.note}>
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: 460, gap: 8 },
   header: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  body: { flexGrow: 0 },
+  body: { flexGrow: 0, flexShrink: 1 },
   image: { width: "100%", height: 140, borderWidth: 2, borderColor: colors.ink },
   note: { backgroundColor: colors.parchment, borderWidth: 2, borderColor: colors.wood, padding: 8 },
   noteLabel: { fontFamily: fonts.heading, fontSize: 11, color: colors.accent },
