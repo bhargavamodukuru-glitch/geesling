@@ -1,0 +1,22 @@
+# Supabase CLI config — `supabase link --project-ref <ref>` then `supabase db push` / `supabase functions deploy geesling`
+project_id = "geesling"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[auth]
+enabled = true
+site_url = "http://localhost:8081"
+additional_redirect_urls = ["geesling://"]
+# Geesling starts everyone with an anonymous account (saved items, walks, rate limits).
+enable_anonymous_sign_ins = true
+
+[functions.geesling]
+verify_jwt = true
