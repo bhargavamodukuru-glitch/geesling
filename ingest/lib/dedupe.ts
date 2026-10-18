@@ -1,5 +1,5 @@
 import type { NormalizedEvent } from "./types.ts";
-import { torontoDate } from "./time.ts";
+import { summarizeSchedule, torontoDate } from "./time.ts";
 
 const STOP_WORDS = new Set([
   "the", "a", "an", "and", "of", "at", "in", "on", "with", "w", "for", "to", "by", "presents",
@@ -83,7 +83,25 @@ export function dedupe(events: NormalizedEvent[]): DedupeResult {
           b.schedule.length - a.schedule.length ||
           `${a.source}:${a.source_id}`.localeCompare(`${b.source}:${b.source_id}`),
       );
-      winners.push(cluster[0]);
+      const winner = cluster[0];
+      // Listings from the winner's own source are extra performances, not rival copies: keep their sessions.
+      const sameSource = cluster.slice(1).filter((e) => e.source === winner.source);
+      if (sameSource.length === 0) {
+        winners.push(winner);
+      } else {
+        const seen = new Set<string>();
+        const schedule = [winner, ...sameSource]
+          .flatMap((e) => e.schedule)
+          .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
+          .filter((s) => (seen.has(s.start) ? false : (seen.add(s.start), true)));
+        winners.push({
+          ...winner,
+          schedule,
+          schedule_summary: summarizeSchedule(schedule),
+          first_start_at: schedule[0].start,
+          last_end_at: schedule.reduce((m, s) => (s.end > m ? s.end : m), schedule[0].end),
+        });
+      }
       duplicatesRemoved += cluster.length - 1;
     }
   }
