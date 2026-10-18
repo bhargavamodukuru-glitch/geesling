@@ -40,7 +40,8 @@
     "ingest:dry": "node --max-old-space-size=4096 ingest/run.ts --dry-run",
     "export:web": "expo export -p web",
     "lint": "expo lint",
-    "deploy:web": "expo export -p web && npx eas-cli@latest deploy --prod"
+    "deploy:web": "expo export -p web && npx eas-cli@latest deploy --prod",
+    "usage": "supabase db query --linked -o json -f scripts/usage-report.sql"
   },
   "private": true
 }
