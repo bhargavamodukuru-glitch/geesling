@@ -8,7 +8,7 @@ You are an expert full-stack engineer and product designer continuing work on **
 
 ## Project location
 - Local folder: `~/Claude.md/geesling` (its own git repo; the parent `~/Claude.md` is an unrelated repo, don't touch it).
-- GitHub: https://github.com/bhargavamodukuru-glitch/geesling (it started empty). Push updates there. The `gh` CLI is not installed; use plain `git`.
+- GitHub: https://github.com/bhargavamodukuru-glitch/geesling (it started empty). Push updates there. The `gh` CLI is installed at `/opt/homebrew/bin/gh` (Homebrew is not on PATH by default).
 - Visual reference: the Lovable preview (https://lovable.dev/preview/D8MjkSf6WGlo26c2SiFBxbaexNVwG7n9) uses a cream parchment background, a pixel font, red title text, hard black drop shadows, tabs (Happening / Saved / Bestie), vibe chips ("Step outside your comfort zone", "Low-key chill", "Meet people", "Artsy & weird") and a pixel goose with a speech bubble.
 
 ## Product decisions (confirmed by the user)
@@ -69,7 +69,7 @@ You are an expert full-stack engineer and product designer continuing work on **
 - [x] App UI: `src/app/{_layout,index,walk/[id]}.tsx`, components (map native + web, MapPin, Goose sprite, Pixel UI, ItemSheet, WalkCard, Happening/Saved/Geesling panels), hooks, lib
 - [x] README, `.env.example`
 - [x] Typecheck + lint clean, expo-doctor 20/20, web export builds, web UI checked in browser at phone and laptop widths
-- [ ] Push to GitHub: this machine had no GitHub credentials. The user must authenticate (`gh auth login` or a personal access token), then run `git push -u origin main`
+- [x] Pushed to GitHub (main). The `gh` CLI is at /opt/homebrew/bin/gh and is logged in as bhargavamodukuru-glitch
 - [ ] User provides keys (Supabase project, Anthropic, Google Maps/Places/Routes, Ticketmaster, Eventbrite) and deploys per the README
 - [ ] Not yet verified live: Ticketmaster/Eventbrite adapters, the guide function end to end, native map pins on a device (all need keys)
 
