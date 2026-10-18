@@ -39,7 +39,8 @@
     "ingest": "node --max-old-space-size=4096 ingest/run.ts",
     "ingest:dry": "node --max-old-space-size=4096 ingest/run.ts --dry-run",
     "export:web": "expo export -p web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "deploy:web": "expo export -p web && npx eas-cli@latest deploy --prod"
   },
   "private": true
 }

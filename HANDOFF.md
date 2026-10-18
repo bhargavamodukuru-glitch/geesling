@@ -61,6 +61,11 @@ You are an expert full-stack engineer and product designer continuing work on **
 
 ## Status: see the checklist at the bottom of this file (kept up to date)
 
+## Live app
+- Web: https://geesling.expo.app (EAS Hosting, Expo project @bhargavmod/geesling). Redeploy with `npm run deploy:web`.
+- Supabase project ref: agmizhktrsaehtsrtzsp. Guide function `geesling` deployed; secrets ANTHROPIC_API_KEY + GOOGLE_MAPS_SERVER_KEY set (separate server key). The web Maps key is restricted to localhost:8081 + geesling.expo.app and to the Maps JavaScript API only.
+- Anthropic account had no credit as of 2026-10-18, so the goose chat returns an error until credit is added.
+
 ## Checklist
 - [x] Expo app scaffolded, deps installed
 - [x] Supabase migration (`supabase/migrations/20261018000000_init.sql`) + `supabase/config.toml` (anonymous sign-ins on)

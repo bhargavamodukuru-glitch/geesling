@@ -130,3 +130,4 @@ npx eas-cli@latest build --platform all
 | `npm run ingest:dry` | Ingest preview (no writes) |
 | `npm run ingest` | Ingest into Supabase |
 | `npm run export:web` | Static web build in `dist/` |
+| `npm run deploy:web` | Build and publish to https://geesling.expo.app |
