@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   cheers: { fontSize: 15, marginLeft: 2 },
   pin: { width: 30, height: 30, borderWidth: 3, alignItems: "center", justifyContent: "center" },
   icon: { fontSize: 14 },
-  orderText: { fontFamily: fonts.heading, fontSize: 14, color: colors.white },
+  orderText: { fontFamily: fonts.body, fontSize: 24, lineHeight: 24, color: colors.white },
   pointer: {
     width: 0,
     height: 0,

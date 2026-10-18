@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   leg: { fontFamily: fonts.body, fontSize: 17, color: colors.wood, marginLeft: 36, marginVertical: 2 },
   stop: { flexDirection: "row", gap: 8, alignItems: "flex-start", backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, padding: 6 },
   badge: { width: 26, height: 26, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },
-  badgeText: { fontFamily: fonts.heading, color: colors.white, fontSize: 13 },
+  badgeText: { fontFamily: fonts.body, color: colors.white, fontSize: 22, lineHeight: 22 },
   stopTitle: { fontFamily: fonts.heading, fontSize: 14, color: colors.ink },
   outro: { fontStyle: "italic" },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
