@@ -62,13 +62,17 @@ You are an expert full-stack engineer and product designer continuing work on **
 ## Status: see the checklist at the bottom of this file (kept up to date)
 
 ## Checklist
-- [x] Expo app scaffolded, deps installed (expo-router, react-native-maps, expo-location, fonts, supabase-js, @vis.gl/react-google-maps)
-- [x] Supabase migration written + smoke-tested
-- [x] ingest/lib (types, time, classify), ingest/sources (toronto, ticketmaster, eventbrite)
-- [ ] ingest/lib/dedupe.ts, ingest/lib/supabase.ts, ingest/run.ts, .github/workflows/ingest.yml
-- [ ] supabase/functions/geesling (guide), supabase/config.toml (anonymous sign-ins on)
-- [ ] App UI: src/app/_layout.tsx, index.tsx (map + Happening/Saved/Geesling tabs), walk/[id].tsx; components (Map native+web, pins, goose sprite, dialog, chips, event sheet, chat, walk panel)
-- [ ] README with setup (env vars, Supabase deploy, Google keys, Ticketmaster, Eventbrite organizers)
-- [ ] Typecheck, run on web, push to GitHub
+- [x] Expo app scaffolded, deps installed
+- [x] Supabase migration (`supabase/migrations/20261018000000_init.sql`) + `supabase/config.toml` (anonymous sign-ins on)
+- [x] Ingestion: `ingest/lib/*`, `ingest/sources/{toronto,ticketmaster,eventbrite}.ts`, `ingest/run.ts`, `.github/workflows/ingest.yml`. Dry run against the live Toronto feed works: 27,111 rows → ~310 upcoming events
+- [x] Guide edge function `supabase/functions/geesling/{index,prompt,places,routes}.ts` (passes `deno check`)
+- [x] App UI: `src/app/{_layout,index,walk/[id]}.tsx`, components (map native + web, MapPin, Goose sprite, Pixel UI, ItemSheet, WalkCard, Happening/Saved/Geesling panels), hooks, lib
+- [x] README, `.env.example`
+- [x] Typecheck + lint clean, expo-doctor 20/20, web export builds, web UI checked in browser at phone and laptop widths
+- [ ] Push to GitHub: this machine had no GitHub credentials. The user must authenticate (`gh auth login` or a personal access token), then run `git push -u origin main`
+- [ ] User provides keys (Supabase project, Anthropic, Google Maps/Places/Routes, Ticketmaster, Eventbrite) and deploys per the README
+- [ ] Not yet verified live: Ticketmaster/Eventbrite adapters, the guide function end to end, native map pins on a device (all need keys)
+
+Ideas for next steps: add a pixel-art app icon and splash; geocode the ~100 City of Toronto events that have no GPS; add EAS build profiles; add admin tooling to manage Eventbrite organizers.
 
 When resuming: run `git -C ~/Claude.md/geesling status` and `git log` to see what's committed, then continue from the first unchecked item.

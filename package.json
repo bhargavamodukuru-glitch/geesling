@@ -1,7 +1,7 @@
 {
   "name": "geesling",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "expo-router/entry",
   "dependencies": {
     "@expo-google-fonts/pixelify-sans": "^0.4.2",
     "@expo-google-fonts/vt323": "^0.4.1",
@@ -25,14 +25,21 @@
     "react-native-web": "^0.21.4"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "@types/react": "~19.3.0",
+    "eslint-config-expo": "~58.0.4",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p ingest",
+    "ingest": "node --max-old-space-size=4096 ingest/run.ts",
+    "ingest:dry": "node --max-old-space-size=4096 ingest/run.ts --dry-run",
+    "export:web": "expo export -p web",
+    "lint": "expo lint"
   },
   "private": true
 }

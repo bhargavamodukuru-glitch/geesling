@@ -1,0 +1,116 @@
+// Native map: Apple Maps on iOS, Google Maps on Android (react-native-maps).
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Platform, StyleSheet } from "react-native";
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from "react-native-maps";
+import { MapPin } from "@/components/MapPin";
+import { decodePolyline } from "@/lib/polyline";
+import { colors } from "@/lib/theme";
+import type { MapItem } from "@/lib/types";
+import { STARDEW_MAP_STYLE } from "./mapStyle";
+import { DEFAULT_DELTA, TORONTO, walkFocusBounds, type CityMapProps } from "./types";
+
+function regionToBounds(region: Region) {
+  return {
+    minLat: region.latitude - region.latitudeDelta / 2,
+    maxLat: region.latitude + region.latitudeDelta / 2,
+    minLng: region.longitude - region.longitudeDelta / 2,
+    maxLng: region.longitude + region.longitudeDelta / 2,
+  };
+}
+
+export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSelect, onBoundsChange }: CityMapProps) {
+  const mapRef = useRef<MapView>(null);
+  const initialRegion = useMemo<Region>(
+    () => ({ latitude: userLocation?.lat ?? TORONTO.lat, longitude: userLocation?.lng ?? TORONTO.lng, ...DEFAULT_DELTA }),
+    // Only the first render decides the initial camera.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  useEffect(() => {
+    onBoundsChange(regionToBounds(initialRegion));
+  }, [initialRegion, onBoundsChange]);
+
+  // Recenter on the walk, or on the user, when asked.
+  useEffect(() => {
+    if (focusKey === 0 || !mapRef.current) return;
+    const bounds = walk ? walkFocusBounds(walk, userLocation) : null;
+    if (bounds) {
+      mapRef.current.fitToCoordinates(
+        [
+          { latitude: bounds.minLat, longitude: bounds.minLng },
+          { latitude: bounds.maxLat, longitude: bounds.maxLng },
+        ],
+        { edgePadding: { top: 80, right: 60, bottom: 80, left: 60 }, animated: true },
+      );
+    } else if (userLocation) {
+      mapRef.current.animateToRegion({ latitude: userLocation.lat, longitude: userLocation.lng, latitudeDelta: 0.025, longitudeDelta: 0.025 }, 500);
+    }
+  }, [focusKey, walk, userLocation]);
+
+  const walkIds = useMemo(() => new Map(walk?.stops.map((s) => [s.item.id, s.order]) ?? []), [walk]);
+  const pins: MapItem[] = useMemo(() => {
+    const stopItems = walk?.stops.map((s) => s.item) ?? [];
+    return [...stopItems, ...items.filter((i) => !walkIds.has(i.id))];
+  }, [items, walk, walkIds]);
+
+  // Custom marker views must re-render briefly after data changes (fonts, labels), then freeze for performance.
+  const [settledPins, setSettledPins] = useState<MapItem[] | null>(null);
+  const tracking = settledPins !== pins;
+  useEffect(() => {
+    const timer = setTimeout(() => setSettledPins(pins), 800);
+    return () => clearTimeout(timer);
+  }, [pins]);
+
+  const legs = useMemo(
+    () =>
+      (walk?.stops ?? [])
+        .filter((s) => s.leg?.polyline)
+        .map((s) => ({ key: `leg-${s.order}`, coords: decodePolyline(s.leg!.polyline!), transit: s.leg!.mode === "transit" })),
+    [walk],
+  );
+
+  return (
+    <MapView
+      ref={mapRef}
+      style={StyleSheet.absoluteFill}
+      provider={Platform.OS === "android" ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
+      initialRegion={initialRegion}
+      customMapStyle={Platform.OS === "android" ? STARDEW_MAP_STYLE : undefined}
+      mapType={Platform.OS === "ios" ? "mutedStandard" : "standard"}
+      showsUserLocation
+      showsPointsOfInterests={false}
+      showsCompass={false}
+      toolbarEnabled={false}
+      onRegionChangeComplete={(region) => onBoundsChange(regionToBounds(region))}
+      onPress={(e) => {
+        if (e.nativeEvent.action !== "marker-press") onSelect(null);
+      }}
+    >
+      {legs.map((leg) => (
+        <Polyline
+          key={leg.key}
+          coordinates={leg.coords}
+          strokeColor={leg.transit ? colors.accent : colors.woodDark}
+          strokeWidth={5}
+          lineDashPattern={leg.transit ? undefined : [10, 8]}
+        />
+      ))}
+      {pins.map((item) => (
+        <Marker
+          key={`${item.kind}-${item.id}`}
+          coordinate={{ latitude: item.lat, longitude: item.lng }}
+          anchor={{ x: 0.5, y: 1 }}
+          tracksViewChanges={tracking || selectedId === item.id}
+          zIndex={walkIds.has(item.id) ? 1000 : selectedId === item.id ? 999 : 1}
+          onPress={(e) => {
+            e.stopPropagation();
+            onSelect(item);
+          }}
+        >
+          <MapPin item={item} order={walkIds.get(item.id)} selected={selectedId === item.id} />
+        </Marker>
+      ))}
+    </MapView>
+  );
+}
