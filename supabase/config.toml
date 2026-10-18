@@ -20,3 +20,7 @@ enable_anonymous_sign_ins = true
 
 [functions.geesling]
 verify_jwt = true
+
+[functions.usage-report]
+# Google Sheets calls this without a Supabase login; it checks its own secret token instead.
+verify_jwt = false
