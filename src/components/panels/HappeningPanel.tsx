@@ -8,29 +8,6 @@ import type { EventFilters, EventItem, TimeWindow } from "@/lib/types";
 
 const BROWSE_CATEGORIES = ["music", "nightlife", "arts_culture", "gallery", "film", "food_drink", "market", "festival", "comedy", "outdoors"];
 
-function playHonk() {
-  if (typeof window === "undefined" || typeof window.AudioContext !== "function") return;
-  const audio = new window.AudioContext();
-  const oscillator = audio.createOscillator();
-  const filter = audio.createBiquadFilter();
-  const volume = audio.createGain();
-  const now = audio.currentTime;
-  oscillator.type = "sawtooth";
-  oscillator.frequency.setValueAtTime(390, now);
-  oscillator.frequency.exponentialRampToValueAtTime(170, now + 0.22);
-  filter.type = "lowpass";
-  filter.frequency.setValueAtTime(850, now);
-  volume.gain.setValueAtTime(0.001, now);
-  volume.gain.exponentialRampToValueAtTime(0.16, now + 0.025);
-  volume.gain.exponentialRampToValueAtTime(0.001, now + 0.27);
-  oscillator.connect(filter);
-  filter.connect(volume);
-  volume.connect(audio.destination);
-  oscillator.start(now);
-  oscillator.stop(now + 0.28);
-  window.setTimeout(() => void audio.close(), 400);
-}
-
 interface Props {
   events: EventItem[];
   loading: boolean;
@@ -38,12 +15,10 @@ interface Props {
   filters: EventFilters;
   onFilters: (filters: EventFilters) => void;
   onSelect: (event: EventItem) => void;
-  onNearMe: () => void;
-  locating: boolean;
   onRefresh: () => void;
 }
 
-export function HappeningPanel({ events, loading, error, filters, onFilters, onSelect, onNearMe, locating, onRefresh }: Props) {
+export function HappeningPanel({ events, loading, error, filters, onFilters, onSelect, onRefresh }: Props) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => {
@@ -64,11 +39,6 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
   const visibleDateLabel = filters.date
     ? new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", month: "short", day: "numeric" }).format(new Date(`${filters.date}T12:00:00Z`))
     : "Date";
-  const honkAndLocate = () => {
-    playHonk();
-    onNearMe();
-  };
-
   return (
     <View style={{ flex: 1 }}>
       <FlatList
@@ -94,17 +64,6 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
                 onPress={() => { setCalendarOpen((open) => !open); setFiltersOpen(false); }}
                 accessibilityLabel={selectedLabel}
               />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={locating ? "Finding events near you" : "Honk and find events near me"}
-                accessibilityState={{ disabled: locating }}
-                disabled={locating}
-                onPress={honkAndLocate}
-                style={({ pressed }) => [styles.nearMeButton, pressed && styles.pressed, locating && styles.locating]}
-              >
-                <Goose size={1} walking={false} />
-                <Text style={styles.nearMeText}>{locating ? "Finding…" : "Near me"}</Text>
-              </Pressable>
               <PixelButton label="↻" small onPress={onRefresh} accessibilityLabel="Refresh events" />
               <Text style={[text.small, styles.resultCount]}>{loading ? "Scouting…" : `${events.length} events`}</Text>
             </View>
@@ -211,10 +170,6 @@ const styles = StyleSheet.create({
   chipScroll: { flexGrow: 0, flexShrink: 0 },
   toolbar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, paddingHorizontal: 12, paddingVertical: 6 },
   resultCount: { marginLeft: "auto" },
-  nearMeButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
-  nearMeText: { fontFamily: fonts.body, fontSize: 16, lineHeight: 18, color: colors.ink },
-  pressed: { transform: [{ translateX: 2 }, { translateY: 2 }] },
-  locating: { opacity: 0.55 },
   filtersPanel: { marginHorizontal: 12, marginBottom: 6, padding: 10, gap: 4, backgroundColor: colors.parchment, borderWidth: 2, borderColor: colors.ink },
   sectionTitle: { fontFamily: fonts.headingRegular, fontSize: 17, color: colors.ink, marginTop: 3 },
   optionRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center", paddingVertical: 4 },

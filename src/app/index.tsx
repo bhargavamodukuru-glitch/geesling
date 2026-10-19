@@ -25,7 +25,7 @@ export default function HomeScreen() {
 function Home() {
   const { width } = useWindowDimensions();
   const wide = width >= 900;
-  const { location, status, locate } = useLocation();
+  const { location } = useLocation();
   const { saved } = useSaved();
 
   const [tab, setTab] = useState<Tab>("happening");
@@ -111,14 +111,6 @@ function Home() {
     setFocusKey((k) => k + 1);
   }, []);
 
-  const nearMe = useCallback(async () => {
-    const found = await locate();
-    if (found) {
-      setWalk(null);
-      setFocusKey((k) => k + 1);
-    }
-  }, [locate]);
-
   const selectItem = useCallback((item: MapItem | null, note: string | null = null) => {
     if (!item) return setSelected(null);
     const stopNote = note ?? walk?.stops.find((s) => s.item.id === item.id)?.why ?? null;
@@ -159,7 +151,7 @@ function Home() {
           [
             ["happening", "HAPPENING"],
             ["saved", `SAVED (${saved.length})`],
-            ["geesling", "GEESLING 🪿"],
+            ["geesling", "ASK GEESLING"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <Pressable
@@ -182,8 +174,6 @@ function Home() {
             filters={filters}
             onFilters={setFilters}
             onSelect={(e) => selectItem(e)}
-            onNearMe={() => void nearMe()}
-            locating={status === "locating"}
             onRefresh={() => setReloadKey((k) => k + 1)}
           />
         ) : null}
