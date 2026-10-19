@@ -1,4 +1,5 @@
-import { useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useState } from "react";
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Goose } from "@/components/Goose";
 import { PixelButton, Tag } from "@/components/Pixel";
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function HappeningPanel({ events, loading, error, filters, onFilters, onSelect, onRefresh }: Props) {
+  const [welcomeVisible, setWelcomeVisible] = useState<boolean | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => {
@@ -39,6 +41,19 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
   const visibleDateLabel = filters.date
     ? new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", month: "short", day: "numeric" }).format(new Date(`${filters.date}T12:00:00Z`))
     : "Date";
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem("geesling.welcome.dismissed")
+      .then((dismissed) => { if (active) setWelcomeVisible(dismissed !== "true"); })
+      .catch(() => { if (active) setWelcomeVisible(true); });
+    return () => { active = false; };
+  }, []);
+
+  const dismissWelcome = () => {
+    setWelcomeVisible(false);
+    void AsyncStorage.setItem("geesling.welcome.dismissed", "true");
+  };
   return (
     <View style={{ flex: 1 }}>
       <FlatList
@@ -47,6 +62,20 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
         contentContainerStyle={{ gap: 8, padding: 12, paddingTop: 4 }}
         ListHeaderComponent={
           <View>
+            {welcomeVisible ? (
+              <View style={styles.welcome}>
+                <Goose size={1.25} walking={false} />
+                <View style={styles.welcomeCopy}>
+                  <Text style={styles.welcomeTitle}>GEESLING SAYS</Text>
+                  <Text style={[text.small, styles.welcomeText]}>
+                    Hi, I’m Geesling, your goose friend who lets you in on all of Toronto’s hot goss. Use the filters to see what’s happening and when! HONK!
+                  </Text>
+                </View>
+                <Pressable onPress={dismissWelcome} accessibilityRole="button" accessibilityLabel="Dismiss welcome message" hitSlop={8} style={styles.welcomeClose}>
+                  <Text style={styles.welcomeCloseText}>×</Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={styles.toolbar}>
               <PixelButton
                 label={activeFilterCount ? `Filters (${activeFilterCount})` : "Filters"}
@@ -170,6 +199,12 @@ const styles = StyleSheet.create({
   chipScroll: { flexGrow: 0, flexShrink: 0 },
   toolbar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, paddingHorizontal: 12, paddingVertical: 6 },
   resultCount: { marginLeft: "auto" },
+  welcome: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 12, marginTop: 8, padding: 10, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
+  welcomeCopy: { flex: 1, gap: 2 },
+  welcomeTitle: { fontFamily: fonts.heading, fontSize: 13, color: colors.accent },
+  welcomeText: { flexShrink: 1 },
+  welcomeClose: { alignSelf: "flex-start", paddingHorizontal: 4 },
+  welcomeCloseText: { fontFamily: fonts.heading, fontSize: 22, lineHeight: 22, color: colors.ink },
   filtersPanel: { marginHorizontal: 12, marginBottom: 6, padding: 10, gap: 4, backgroundColor: colors.parchment, borderWidth: 2, borderColor: colors.ink },
   sectionTitle: { fontFamily: fonts.headingRegular, fontSize: 17, color: colors.ink, marginTop: 3 },
   optionRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center", paddingVertical: 4 },
