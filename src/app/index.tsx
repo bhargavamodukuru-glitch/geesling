@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Header } from "@/components/Header";
 import { ItemSheet } from "@/components/ItemSheet";
 import { CityMap } from "@/components/map/CityMap";
 import { GeeslingPanel } from "@/components/panels/GeeslingPanel";
@@ -176,7 +175,17 @@ function Home() {
       </View>
       <View style={{ flex: 1 }}>
         {tab === "happening" ? (
-          <HappeningPanel events={events} loading={loading} error={error} filters={filters} onFilters={setFilters} onSelect={(e) => selectItem(e)} />
+          <HappeningPanel
+            events={events}
+            loading={loading}
+            error={error}
+            filters={filters}
+            onFilters={setFilters}
+            onSelect={(e) => selectItem(e)}
+            onNearMe={() => void nearMe()}
+            locating={status === "locating"}
+            onRefresh={() => setReloadKey((k) => k + 1)}
+          />
         ) : null}
         {tab === "saved" ? <SavedPanel onSelect={(i) => selectItem(i)} onShowWalk={showWalk} /> : null}
         {/* Kept mounted so the conversation survives tab switches. */}
@@ -184,7 +193,6 @@ function Home() {
           <GeeslingPanel origin={location} freeOnly={filters.freeOnly} onWalk={showWalk} onSelectStop={(item, why) => selectItem(item, why)} />
         </View>
       </View>
-      <Header onNearMe={() => void nearMe()} onRefresh={() => setReloadKey((k) => k + 1)} locating={status === "locating"} />
     </View>
   );
 

@@ -8,6 +8,29 @@ import type { EventFilters, EventItem, TimeWindow } from "@/lib/types";
 
 const BROWSE_CATEGORIES = ["music", "nightlife", "arts_culture", "gallery", "film", "food_drink", "market", "festival", "comedy", "outdoors"];
 
+function playHonk() {
+  if (typeof window === "undefined" || typeof window.AudioContext !== "function") return;
+  const audio = new window.AudioContext();
+  const oscillator = audio.createOscillator();
+  const filter = audio.createBiquadFilter();
+  const volume = audio.createGain();
+  const now = audio.currentTime;
+  oscillator.type = "sawtooth";
+  oscillator.frequency.setValueAtTime(390, now);
+  oscillator.frequency.exponentialRampToValueAtTime(170, now + 0.22);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(850, now);
+  volume.gain.setValueAtTime(0.001, now);
+  volume.gain.exponentialRampToValueAtTime(0.16, now + 0.025);
+  volume.gain.exponentialRampToValueAtTime(0.001, now + 0.27);
+  oscillator.connect(filter);
+  filter.connect(volume);
+  volume.connect(audio.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.28);
+  window.setTimeout(() => void audio.close(), 400);
+}
+
 interface Props {
   events: EventItem[];
   loading: boolean;
@@ -15,9 +38,12 @@ interface Props {
   filters: EventFilters;
   onFilters: (filters: EventFilters) => void;
   onSelect: (event: EventItem) => void;
+  onNearMe: () => void;
+  locating: boolean;
+  onRefresh: () => void;
 }
 
-export function HappeningPanel({ events, loading, error, filters, onFilters, onSelect }: Props) {
+export function HappeningPanel({ events, loading, error, filters, onFilters, onSelect, onNearMe, locating, onRefresh }: Props) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => {
@@ -38,17 +64,53 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
   const visibleDateLabel = filters.date
     ? new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", month: "short", day: "numeric" }).format(new Date(`${filters.date}T12:00:00Z`))
     : "Date";
+  const honkAndLocate = () => {
+    playHonk();
+    onNearMe();
+  };
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={styles.toolbar}>
-        <PixelButton label={activeFilterCount ? `Filters (${activeFilterCount})` : "Filters"} icon="☰" small active={filtersOpen} onPress={() => setFiltersOpen((open) => !open)} accessibilityLabel={`Filters${activeFilterCount ? `, ${activeFilterCount} selected` : ""}`} />
-        <PixelButton label={visibleDateLabel} icon="📅" small active={Boolean(filters.date) || calendarOpen} onPress={() => setCalendarOpen((open) => !open)} accessibilityLabel={selectedLabel} />
-        <Text style={[text.small, styles.resultCount]}>{loading ? "Scouting…" : `${events.length} events`}</Text>
-      </View>
-      {calendarOpen ? (
-        <View style={styles.calendar}>
-          <View style={styles.monthHeader}>
+      <FlatList
+        data={events}
+        keyExtractor={(e) => e.id}
+        contentContainerStyle={{ gap: 8, padding: 12, paddingTop: 4 }}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.toolbar}>
+              <PixelButton
+                label={activeFilterCount ? `Filters (${activeFilterCount})` : "Filters"}
+                icon="☰"
+                small
+                active={filtersOpen}
+                onPress={() => { setFiltersOpen((open) => !open); setCalendarOpen(false); }}
+                accessibilityLabel={`Filters${activeFilterCount ? `, ${activeFilterCount} selected` : ""}`}
+              />
+              <PixelButton
+                label={visibleDateLabel}
+                icon="📅"
+                small
+                active={Boolean(filters.date) || calendarOpen}
+                onPress={() => { setCalendarOpen((open) => !open); setFiltersOpen(false); }}
+                accessibilityLabel={selectedLabel}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={locating ? "Finding events near you" : "Honk and find events near me"}
+                accessibilityState={{ disabled: locating }}
+                disabled={locating}
+                onPress={honkAndLocate}
+                style={({ pressed }) => [styles.nearMeButton, pressed && styles.pressed, locating && styles.locating]}
+              >
+                <Goose size={2} walking={false} />
+                <Text style={styles.nearMeText}>{locating ? "Finding…" : "Near me"}</Text>
+              </Pressable>
+              <PixelButton label="↻" small onPress={onRefresh} accessibilityLabel="Refresh events" />
+              <Text style={[text.small, styles.resultCount]}>{loading ? "Scouting…" : `${events.length} events`}</Text>
+            </View>
+            {calendarOpen ? (
+              <View style={styles.calendar}>
+                <View style={styles.monthHeader}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Previous month"
@@ -60,8 +122,8 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
             <Pressable accessibilityRole="button" accessibilityLabel="Next month" onPress={() => setVisibleMonth(new Date(Date.UTC(visibleMonth.getUTCFullYear(), visibleMonth.getUTCMonth() + 1, 1)))} style={styles.monthArrow}>
               <Text style={styles.monthArrowText}>›</Text>
             </Pressable>
-          </View>
-          <View style={styles.calendarGrid}>
+                </View>
+                <View style={styles.calendarGrid}>
             {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => <Text key={`${day}${i}`} style={styles.weekday}>{day}</Text>)}
             {Array.from({ length: firstWeekday }, (_, i) => <View key={`blank${i}`} style={styles.calendarDay} />)}
             {Array.from({ length: daysInMonth }, (_, i) => {
@@ -81,12 +143,12 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
                 ><Text style={[styles.dayText, disabled && styles.disabledText, selected && styles.selectedDayText]}>{day}</Text></Pressable>
               );
             })}
-          </View>
-          <Text style={styles.calendarHint}>Pick today or any future date in Toronto</Text>
-        </View>
-      ) : null}
-      {filtersOpen ? (
-        <View style={styles.filtersPanel}>
+                </View>
+                <Text style={styles.calendarHint}>Pick today or any future date in Toronto</Text>
+              </View>
+            ) : null}
+            {filtersOpen ? (
+              <View style={styles.filtersPanel}>
           <Text style={styles.sectionTitle}>When</Text>
           <View style={styles.optionRow}>
             {(Object.keys(WINDOW_LABELS) as TimeWindow[]).map((w) => (
@@ -106,15 +168,12 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
             <PixelButton label="Drinks" icon="🍻" small active={filters.drinksOnly} onPress={() => onFilters({ ...filters, drinksOnly: !filters.drinksOnly })} />
             <PixelButton label="RSVP ahead" icon="🎟️" small active={filters.rsvpOnly} onPress={() => onFilters({ ...filters, rsvpOnly: !filters.rsvpOnly })} />
           </View>
-        </View>
-      ) : null}
+              </View>
+            ) : null}
 
-      {error ? <Text style={[text.small, styles.error]}>Couldn’t load events: {error}</Text> : null}
-
-      <FlatList
-        data={events}
-        keyExtractor={(e) => e.id}
-        contentContainerStyle={{ gap: 8, padding: 12, paddingTop: 4 }}
+            {error ? <Text style={[text.small, styles.error]}>Couldn’t load events: {error}</Text> : null}
+          </View>
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
             <Goose size={4} />
@@ -152,6 +211,10 @@ const styles = StyleSheet.create({
   chipScroll: { flexGrow: 0, flexShrink: 0 },
   toolbar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, paddingHorizontal: 12, paddingVertical: 6 },
   resultCount: { marginLeft: "auto" },
+  nearMeButton: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
+  nearMeText: { fontFamily: fonts.body, fontSize: 16, lineHeight: 18, color: colors.ink },
+  pressed: { transform: [{ translateX: 2 }, { translateY: 2 }] },
+  locating: { opacity: 0.55 },
   filtersPanel: { marginHorizontal: 12, marginBottom: 6, padding: 10, gap: 4, backgroundColor: colors.parchment, borderWidth: 2, borderColor: colors.ink },
   sectionTitle: { fontFamily: fonts.headingRegular, fontSize: 17, color: colors.ink, marginTop: 3 },
   optionRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center", paddingVertical: 4 },
