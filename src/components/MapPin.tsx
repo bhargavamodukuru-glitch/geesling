@@ -11,6 +11,7 @@ interface Props {
 }
 
 function placeEmoji(types: string[]): string {
+  if (types.includes("photography_spot")) return "📸";
   if (types.some((t) => /bar|pub|brewery|night_club|wine/.test(t))) return "🍺";
   if (types.some((t) => /bakery|dessert|ice_cream|chocolate|donut|confection/.test(t))) return "🧁";
   if (types.some((t) => /cafe|coffee|tea/.test(t))) return "☕";

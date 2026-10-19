@@ -6,6 +6,7 @@ import { Panel } from "@/components/Pixel";
 import { Goose } from "@/components/Goose";
 import { MapPin } from "@/components/MapPin";
 import { decodePolyline } from "@/lib/polyline";
+import { PHOTO_SPOTS } from "@/lib/photoSpots";
 import { colors, text } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
 import { TORONTO, walkFocusBounds, type CityMapProps } from "./types";
@@ -33,7 +34,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
   const walkIds = useMemo(() => new globalThis.Map(walk?.stops.map((s) => [s.item.id, s.order]) ?? []), [walk]);
   const pins: MapItem[] = useMemo(() => {
     const stopItems = walk?.stops.map((s) => s.item) ?? [];
-    return [...stopItems, ...items.filter((i) => !walkIds.has(i.id))];
+    return [...stopItems, ...items.filter((i) => !walkIds.has(i.id)), ...(walk ? [] : PHOTO_SPOTS)];
   }, [items, walk, walkIds]);
   const legs = useMemo(
     () =>

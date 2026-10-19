@@ -4,6 +4,7 @@ import { Platform, StyleSheet } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from "react-native-maps";
 import { MapPin } from "@/components/MapPin";
 import { decodePolyline } from "@/lib/polyline";
+import { PHOTO_SPOTS } from "@/lib/photoSpots";
 import { colors } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
 import { STARDEW_MAP_STYLE } from "./mapStyle";
@@ -51,7 +52,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
   const walkIds = useMemo(() => new Map(walk?.stops.map((s) => [s.item.id, s.order]) ?? []), [walk]);
   const pins: MapItem[] = useMemo(() => {
     const stopItems = walk?.stops.map((s) => s.item) ?? [];
-    return [...stopItems, ...items.filter((i) => !walkIds.has(i.id))];
+    return [...stopItems, ...items.filter((i) => !walkIds.has(i.id)), ...(walk ? [] : PHOTO_SPOTS)];
   }, [items, walk, walkIds]);
 
   // Custom marker views must re-render briefly after data changes (fonts, labels), then freeze for performance.
