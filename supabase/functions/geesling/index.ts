@@ -8,7 +8,7 @@ import { type MaxPrice, type PlaceItem, searchPlaces } from "./places.ts";
 import { bestLeg, type Leg } from "./routes.ts";
 
 const DOWNTOWN = { lat: 43.6532, lng: -79.3832 };
-const MAX_TURNS = 8;
+const MAX_TURNS = 5;
 const HOURLY_LIMIT = Number(Deno.env.get("GUIDE_HOURLY_LIMIT") ?? 20);
 
 const corsHeaders = {
@@ -233,7 +233,7 @@ async function runSearchEvents(db: SupabaseClient, input: Record<string, unknown
     free_only: ctx.freeOnly || input.free_only === true,
     max_price: typeof input.max_price === "number" ? input.max_price : null,
     cats: Array.isArray(input.categories) && input.categories.length ? input.categories : null,
-    lim: typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 25) : 12,
+    lim: typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 12) : 10,
   });
   if (error) throw new Error(`search_events failed: ${error.message}`);
   return ((data ?? []) as Array<Omit<EventItem, "kind">>).map((row) => ({
@@ -358,8 +358,8 @@ Deno.serve(async (req) => {
 
   const history: Anthropic.Beta.BetaMessageParam[] = (body.history ?? [])
     .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.text === "string" && m.text.trim())
-    .slice(-6)
-    .map((m) => ({ role: m.role, content: m.text.slice(0, 2000) }));
+    .slice(-4)
+    .map((m) => ({ role: m.role, content: m.text.slice(0, 1200) }));
   // The API requires the first message to be from the user.
   while (history.length && history[0].role !== "user") history.shift();
 
@@ -390,11 +390,11 @@ Deno.serve(async (req) => {
     for (let turn = 0; turn < MAX_TURNS && !presented; turn++) {
       const response = await client.beta.messages.create({
         model: MODEL,
-        max_tokens: 16000,
+        max_tokens: 4096,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
         thinking: { type: "adaptive" },
-        output_config: { effort: "medium" },
+        output_config: { effort: "low" },
         system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         messages,
@@ -441,7 +441,7 @@ Deno.serve(async (req) => {
                 radiusMeters: typeof input.radius_m === "number" ? input.radius_m : 2500,
                 maxPrice: freeOnly ? "inexpensive" : ((["inexpensive", "moderate", "expensive", "any"] as const).find((p) => p === input.max_price) ?? "any") as MaxPrice,
                 openNow: input.open_now === true,
-                limit: typeof input.limit === "number" ? input.limit : 8,
+                limit: typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 10) : 6,
               });
               const filtered = freeOnly ? places.filter((p) => p.is_free) : places;
               filtered.forEach((p) => known.set(p.id, p));

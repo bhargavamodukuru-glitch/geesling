@@ -1,6 +1,6 @@
 import type Anthropic from "npm:@anthropic-ai/sdk@0.135.0";
 
-export const MODEL = "claude-opus-5-5";
+export const MODEL = "claude-haiku-5-5";
 
 export const CATEGORY_ENUM = [
   "music", "nightlife", "arts_culture", "gallery", "film", "food_drink", "market", "festival",
