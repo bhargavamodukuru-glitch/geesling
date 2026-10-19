@@ -106,7 +106,8 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   tagText: {
-    fontFamily: fonts.headingRegular,
-    fontSize: 11,
+    fontFamily: fonts.body,
+    fontSize: 16,
+    lineHeight: 17,
   },
 });

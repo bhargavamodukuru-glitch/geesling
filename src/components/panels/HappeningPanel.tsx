@@ -166,5 +166,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: colors.paper, borderWidth: 3, borderColor: colors.ink, padding: 8 },
   swatch: { width: 36, height: 36, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },
   swatchText: { fontSize: 16 },
-  title: { fontFamily: fonts.heading, fontSize: 14, color: colors.ink },
+  title: { fontFamily: fonts.body, fontSize: 20, lineHeight: 21, color: colors.ink },
 });
