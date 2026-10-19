@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Goose } from "@/components/Goose";
 import { ItemSheet } from "@/components/ItemSheet";
 import { CityMap } from "@/components/map/CityMap";
 import { GeeslingPanel } from "@/components/panels/GeeslingPanel";
@@ -161,7 +162,10 @@ function Home() {
             accessibilityState={{ selected: tab === key }}
             style={[styles.tab, tab === key && styles.tabActive]}
           >
-            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
+            <View style={styles.tabLabel}>
+              <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
+              {key === "geesling" ? <Goose size={0.8} walking={false} /> : null}
+            </View>
           </Pressable>
         ))}
       </View>
@@ -240,6 +244,7 @@ const styles = StyleSheet.create({
   panel: { flex: 1, borderTopWidth: 0, borderColor: colors.ink, backgroundColor: colors.parchment },
   panelWide: { borderLeftWidth: 0 },
   tabs: { flexDirection: "row", borderBottomWidth: 3, borderColor: colors.ink },
+  tabLabel: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
   tab: { flex: 1, paddingVertical: 10, alignItems: "center", backgroundColor: colors.paper, borderRightWidth: 2, borderColor: colors.ink },
   tabActive: { backgroundColor: colors.accent },
   tabText: { fontFamily: fonts.heading, fontSize: 12, color: colors.ink },

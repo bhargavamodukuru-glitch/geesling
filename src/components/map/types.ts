@@ -5,7 +5,7 @@ export interface CityMapProps {
   walk: Walk | null;
   selectedId: string | null;
   userLocation: { lat: number; lng: number } | null;
-  /** Bumped to recenter the camera on the user (Near me) or the walk. */
+  /** Bumped to recenter the camera on the user's location or the active walk. */
   focusKey: number;
   onSelect: (item: MapItem | null) => void;
   onBoundsChange: (bounds: Bounds) => void;

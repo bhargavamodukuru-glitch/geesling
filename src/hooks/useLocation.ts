@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export type LatLng = { lat: number; lng: number };
 
-/** Foreground location. Asks once on mount; `locate()` re-asks (the "Near me" button). */
+/** Uses an existing foreground location permission to center the map and guide Geesling. */
 export function useLocation() {
   const [location, setLocation] = useState<LatLng | null>(null);
   const [status, setStatus] = useState<"idle" | "locating" | "granted" | "denied" | "error">("idle");
