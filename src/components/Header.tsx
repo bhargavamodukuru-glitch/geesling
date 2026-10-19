@@ -29,13 +29,13 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 4,
     backgroundColor: colors.paper,
     borderTopWidth: 3,
     borderColor: colors.ink,
   },
-  title: { fontFamily: fonts.heading, fontSize: 20, color: colors.accent, letterSpacing: 2 },
-  sub: { fontFamily: fonts.body, fontSize: 17, color: colors.inkSoft, marginTop: -2 },
+  title: { fontFamily: fonts.heading, fontSize: 18, color: colors.accent, letterSpacing: 2 },
+  sub: { fontFamily: fonts.body, fontSize: 15, color: colors.inkSoft, marginTop: -2 },
 });
