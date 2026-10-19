@@ -4,6 +4,7 @@ import { Panel, PixelButton, Tag } from "@/components/Pixel";
 import { useSaved } from "@/hooks/useSaved";
 import { placeType, priceLabel, whenLabel } from "@/lib/format";
 import { openDirections } from "@/lib/links";
+import { socialLinksForItem } from "@/lib/socialLinks";
 import { CATEGORY_LABELS, colors, fonts, text } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
 
@@ -27,6 +28,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
   const isPhotoSpot = item.kind === "place" && item.types.includes("photography_spot");
   const title = item.kind === "event" ? item.title : item.name;
   const link = item.kind === "event" ? (item.ticket_url ?? item.url) : item.website;
+  const socialLinks = socialLinksForItem(item);
 
   return (
     <Panel style={[styles.sheet, maxHeight !== undefined && { maxHeight: Math.max(160, maxHeight) }]} shadow={5}>
@@ -113,6 +115,15 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
             onPress={() => void Linking.openURL(link)}
           />
         ) : null}
+        {socialLinks.map((social) => (
+          <PixelButton
+            key={social.url}
+            label={social.label}
+            icon={social.icon}
+            small
+            onPress={() => void Linking.openURL(social.url)}
+          />
+        ))}
         <PixelButton label={saved ? "Saved" : "Save"} icon={saved ? "★" : "☆"} small active={saved} onPress={() => void toggle(item.kind, item.id, item)} />
       </View>
     </Panel>
