@@ -15,7 +15,7 @@ Your job: turn the person's request into a real walk around Toronto made of thin
 How to work:
 1. Search before you suggest. Use search_events for time-bound things (concerts, club nights, festivals, markets, film screenings, gallery openings, free events) and search_places for always-open spots (restaurants, bakeries, dessert shops, thrift stores, parks, bookstores, galleries, bars). Run several focused searches in parallel when the request has several parts, e.g. one for "thrift", one for "dessert", one for "street food".
 2. Only use items your searches returned, and copy their ids exactly. Never invent places, events, prices, or times.
-3. Events must be live now or start before the walk ends. Prefer events that are live or start soon after the person arrives.
+3. Events must overlap the requested time window. If the person names a future date or date range, search that exact Toronto-local date range, even when it is outside the default walk window. For multi-day ranges, include relevant events from each requested day and clearly state each event's date. Never substitute today's events for a requested future date.
 4. Respect money: if they ask for free or low-cost, favour is_free items and cheap places. Never call something free unless is_free is true.
 5. Respect time: if a time budget is given, the stays plus travel must fit inside it. Walking is about 12 minutes per km; hops over ~2 km will use the TTC, which takes roughly 4 minutes per km plus waiting. Keep stops clustered in one or two neighbourhoods so the walk flows.
 6. If an event has rsvp_required, say so plainly in that stop's "why" (e.g. "grab a free ticket ahead of time"). If something is 19+, say so.
@@ -28,7 +28,7 @@ export const TOOLS: Anthropic.Beta.BetaToolUnion[] = [
   {
     name: "search_events",
     description:
-      "Search Geesling's database of live and upcoming Toronto events (City of Toronto, Ticketmaster, Eventbrite). Returns events whose next session overlaps the time window, with price, RSVP and schedule details. Use short keyword queries (e.g. 'jazz', 'night market', 'drag'), or leave query empty and filter by categories.",
+      "Search Geesling's database of live and upcoming Toronto events (City of Toronto, Ticketmaster, Eventbrite). Returns events whose next session overlaps the time window, with price, RSVP and schedule details. Use the exact date range supplied in the current-request context when one is specified. Use short keyword queries (e.g. 'Halloween', 'jazz', 'night market', 'drag'), or leave query empty and filter by categories.",
     input_schema: {
       type: "object",
       properties: {
@@ -113,10 +113,12 @@ export function contextBlock(args: {
   endIso: string;
   timeBudgetMinutes: number | null;
   freeOnly: boolean;
+  requestedDateRange?: string | null;
 }): string {
   return [
     `Current time in Toronto: ${args.nowLabel} (${args.nowIso}).`,
     `Walk starts: ${args.startIso}. Walk must end by: ${args.endIso}.`,
+    args.requestedDateRange ? `The person explicitly requested events on: ${args.requestedDateRange}. Search only this full Toronto-local date range, including every requested day. Do not replace it with today or the default walk window.` : "",
     args.timeBudgetMinutes ? `Time budget: ${args.timeBudgetMinutes} minutes total.` : "No strict time budget; keep it to an easy afternoon or evening.",
     args.originIsUser
       ? `The person is at lat ${args.origin.lat.toFixed(5)}, lng ${args.origin.lng.toFixed(5)}. Start the walk near them.`

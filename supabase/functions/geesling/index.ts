@@ -68,6 +68,87 @@ interface GuideRequest {
   freeOnly?: boolean;
 }
 
+interface RequestedDateRange {
+  from: Date;
+  to: Date;
+  label: string;
+}
+
+const MONTHS: Record<string, number> = {
+  jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3,
+  may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7, sep: 8, sept: 8,
+  september: 8, oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
+};
+
+function torontoMidnightUtc(year: number, month: number, day: number): Date {
+  const wanted = Date.UTC(year, month, day);
+  const probe = new Date(wanted);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(probe);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  const observed = Date.UTC(value("year"), value("month") - 1, value("day"), value("hour"), value("minute"), value("second"));
+  return new Date(wanted - (observed - wanted));
+}
+
+/** Resolve explicit month/day requests in Toronto time; an omitted past year means the next occurrence. */
+function requestedDateRange(prompt: string, now: Date): RequestedDateRange | null {
+  const found: Array<{ year?: number; month: number; day: number }> = [];
+  const monthDate = /\b(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(20\d{2}))?/gi;
+  for (const match of prompt.matchAll(monthDate)) {
+    const month = MONTHS[match[1].toLowerCase()];
+    const day = Number(match[2]);
+    if (day < 1 || day > 31) continue;
+    found.push({ year: match[3] ? Number(match[3]) : undefined, month, day });
+    const tail = prompt.slice((match.index ?? 0) + match[0].length);
+    const shorthand = /^\s*(?:,?\s*(?:and|&|to|through|-)\s*)(\d{1,2})(?:st|nd|rd|th)?\b/i.exec(tail);
+    if (shorthand) {
+      const shortDay = Number(shorthand[1]);
+      if (shortDay >= 1 && shortDay <= 31) found.push({ year: match[3] ? Number(match[3]) : undefined, month, day: shortDay });
+    }
+  }
+  for (const match of prompt.matchAll(/\b(20\d{2})-(\d{2})-(\d{2})\b/g)) {
+    found.push({ year: Number(match[1]), month: Number(match[2]) - 1, day: Number(match[3]) });
+  }
+  if (!found.length) return null;
+
+  const todayParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const today = Date.UTC(
+    Number(todayParts.find((part) => part.type === "year")?.value),
+    Number(todayParts.find((part) => part.type === "month")?.value) - 1,
+    Number(todayParts.find((part) => part.type === "day")?.value),
+  );
+  const dates: Array<{ year: number; month: number; day: number; stamp: number }> = [];
+  for (const part of found) {
+    let year = part.year ?? new Date(today).getUTCFullYear();
+    let stamp = Date.UTC(year, part.month, part.day);
+    const check = new Date(stamp);
+    if (check.getUTCMonth() !== part.month || check.getUTCDate() !== part.day) continue;
+    if (!part.year && stamp < today) {
+      year += 1;
+      stamp = Date.UTC(year, part.month, part.day);
+    }
+    if (!part.year && dates.length && stamp < dates[dates.length - 1].stamp) {
+      year += 1;
+      stamp = Date.UTC(year, part.month, part.day);
+    }
+    dates.push({ year, month: part.month, day: part.day, stamp });
+  }
+  if (!dates.length) return null;
+  dates.sort((a, b) => a.stamp - b.stamp);
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const from = torontoMidnightUtc(first.year, first.month, first.day);
+  const to = torontoMidnightUtc(last.year, last.month, last.day + 1);
+  const labelDate = (date: typeof first) => new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto", month: "long", day: "numeric", year: "numeric",
+  }).format(torontoMidnightUtc(date.year, date.month, date.day));
+  return { from, to, label: first.stamp === last.stamp ? labelDate(first) : `${labelDate(first)} through ${labelDate(last)}` };
+}
+
 interface PresentWalkInput {
   title: string;
   intro: string;
@@ -140,12 +221,12 @@ function placeForModel(p: PlaceItem) {
   };
 }
 
-async function runSearchEvents(db: SupabaseClient, input: Record<string, unknown>, ctx: { origin: { lat: number; lng: number }; endIso: string; freeOnly: boolean }) {
+async function runSearchEvents(db: SupabaseClient, input: Record<string, unknown>, ctx: { origin: { lat: number; lng: number }; fromIso: string; endIso: string; freeOnly: boolean; requestedDates: boolean }) {
   const near = isLatLng(input.near) ? input.near : ctx.origin;
   const { data, error } = await db.rpc("search_events", {
     q: typeof input.query === "string" && input.query.trim() ? input.query.trim() : null,
-    from_ts: typeof input.from === "string" ? input.from : new Date().toISOString(),
-    to_ts: typeof input.to === "string" ? input.to : ctx.endIso,
+    from_ts: ctx.requestedDates ? ctx.fromIso : typeof input.from === "string" ? input.from : ctx.fromIso,
+    to_ts: ctx.requestedDates ? ctx.endIso : typeof input.to === "string" ? input.to : ctx.endIso,
     center_lat: near.lat,
     center_lng: near.lng,
     radius_km: typeof input.radius_km === "number" ? Math.min(input.radius_km, 40) : 6,
@@ -267,9 +348,10 @@ Deno.serve(async (req) => {
   }
 
   const now = new Date();
-  const start = body.startAt && !Number.isNaN(Date.parse(body.startAt)) && Date.parse(body.startAt) > now.getTime() ? new Date(body.startAt) : now;
+  const targetDates = requestedDateRange(prompt, now);
+  const start = targetDates?.from ?? (body.startAt && !Number.isNaN(Date.parse(body.startAt)) && Date.parse(body.startAt) > now.getTime() ? new Date(body.startAt) : now);
   const budget = typeof body.timeBudgetMinutes === "number" && body.timeBudgetMinutes > 0 ? Math.min(body.timeBudgetMinutes, 16 * 60) : null;
-  const end = new Date(start.getTime() + (budget ?? 6 * 60) * 60_000);
+  const end = targetDates?.to ?? new Date(start.getTime() + (budget ?? 6 * 60) * 60_000);
   const origin = isLatLng(body.origin) ? body.origin : null;
   const searchOrigin = origin ?? DOWNTOWN;
   const freeOnly = body.freeOnly === true;
@@ -294,6 +376,7 @@ Deno.serve(async (req) => {
         endIso: end.toISOString(),
         timeBudgetMinutes: budget,
         freeOnly,
+        requestedDateRange: targetDates?.label ?? null,
       })}\n\nRequest: ${prompt}`,
     },
   ];
@@ -338,7 +421,13 @@ Deno.serve(async (req) => {
           const input = (tool.input ?? {}) as Record<string, unknown>;
           try {
             if (tool.name === "search_events") {
-              const events = await runSearchEvents(db, input, { origin: searchOrigin, endIso: end.toISOString(), freeOnly });
+              const events = await runSearchEvents(db, input, {
+                origin: searchOrigin,
+                fromIso: (targetDates?.from ?? now).toISOString(),
+                endIso: end.toISOString(),
+                freeOnly,
+                requestedDates: targetDates !== null,
+              });
               events.forEach((e) => known.set(e.id, e));
               return { type: "tool_result", tool_use_id: tool.id, content: JSON.stringify({ count: events.length, events: events.map(eventForModel) }) };
             }
