@@ -184,12 +184,12 @@ function Home() {
           <GeeslingPanel origin={location} freeOnly={filters.freeOnly} onWalk={showWalk} onSelectStop={(item, why) => selectItem(item, why)} />
         </View>
       </View>
+      <Header onNearMe={() => void nearMe()} onRefresh={() => setReloadKey((k) => k + 1)} locating={status === "locating"} />
     </View>
   );
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
-      <Header onNearMe={() => void nearMe()} onRefresh={() => setReloadKey((k) => k + 1)} locating={status === "locating"} collapsible />
       <View
         style={[styles.layout, wide ? styles.row : styles.column]}
         onLayout={(event) => setSplitLength(wide ? event.nativeEvent.layout.width : event.nativeEvent.layout.height)}
