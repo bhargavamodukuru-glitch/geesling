@@ -20,6 +20,16 @@ export interface PlaceItem {
   summary: string | null;
   open_now: boolean | null;
   hours: string[] | null;
+  /** Transient review evidence for recommendation quality; never cached or saved with walks. */
+  review_evidence?: Array<{ rating: number; text: string; published: string | null; author: string | null; url: string | null }>;
+}
+
+interface GoogleReview {
+  rating?: number;
+  text?: { text?: string };
+  relativePublishTimeDescription?: string;
+  authorAttribution?: { displayName?: string; uri?: string };
+  googleMapsUri?: string;
 }
 
 interface GooglePlace {
@@ -37,10 +47,11 @@ interface GooglePlace {
   editorialSummary?: { text?: string };
   currentOpeningHours?: { openNow?: boolean; weekdayDescriptions?: string[] };
   regularOpeningHours?: { openNow?: boolean; weekdayDescriptions?: string[] };
+  reviews?: GoogleReview[];
   businessStatus?: string;
 }
 
-const FIELD_MASK = [
+const BASE_FIELD_MASK = [
   "places.id",
   "places.displayName",
   "places.formattedAddress",
@@ -56,7 +67,9 @@ const FIELD_MASK = [
   "places.currentOpeningHours",
   "places.regularOpeningHours",
   "places.businessStatus",
-].join(",");
+];
+
+const FOOD_QUERY = /\b(food|restaurant|dessert|bakery|cafe|coffee|tea|bubble tea|ice cream|gelato|donut|doughnut|pastry|cake|chocolate|brunch|lunch|dinner|snack|eat|taco|pizza|ramen|noodle|dumpling|sushi|burger|shawarma|boba)\b/i;
 
 const FREE_TYPES = new Set([
   "park", "city_park", "national_park", "state_park", "dog_park", "playground", "hiking_area", "beach",
@@ -106,6 +119,17 @@ export function toPlaceItem(p: GooglePlace): PlaceItem | null {
     summary: p.editorialSummary?.text ?? null,
     open_now: hours?.openNow ?? null,
     hours: hours?.weekdayDescriptions ?? null,
+    review_evidence: p.reviews?.slice(0, 2).flatMap((review) => {
+      const snippet = review.text?.text?.trim();
+      if (!snippet || typeof review.rating !== "number") return [];
+      return [{
+        rating: review.rating,
+        text: snippet.slice(0, 220),
+        published: review.relativePublishTimeDescription ?? null,
+        author: review.authorAttribution?.displayName ?? null,
+        url: review.googleMapsUri ?? null,
+      }];
+    }),
   };
 }
 
@@ -120,9 +144,10 @@ export async function searchPlaces(apiKey: string, search: PlaceSearch): Promise
     regionCode: "CA",
   };
   if (search.openNow) body.openNow = true;
+  const fieldMask = [...BASE_FIELD_MASK, ...(FOOD_QUERY.test(search.query) ? ["places.reviews"] : [])].join(",");
   const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": FIELD_MASK },
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": fieldMask },
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(`Places search failed: ${response.status} ${await response.text()}`);

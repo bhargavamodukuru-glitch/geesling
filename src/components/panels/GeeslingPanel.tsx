@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import * as Linking from "expo-linking";
 import { ActivityIndicator, FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Goose } from "@/components/Goose";
 import { Panel, PixelButton } from "@/components/Pixel";
@@ -48,13 +49,14 @@ export function GeeslingPanel({ origin, freeOnly, onWalk, onSelectStop }: Props)
     const trimmed = prompt.trim();
     if (!trimmed || busy) return;
     const userMessage: ChatMessage = { id: nextId(), role: "user", text: trimmed };
+    const musicCrawlerLink = /\b(music|concerts?|gigs?|bands?|live performances?|live shows?)\b/i.test(trimmed);
     const history = messages;
     setMessages((m) => [...m, userMessage]);
     setDraft("");
     setBusy(true);
     try {
       const reply = await askGeesling({ prompt: trimmed, history, origin, timeBudgetMinutes: budget, startAt: null, freeOnly });
-      setMessages((m) => [...m, { id: nextId(), role: "assistant", text: reply.message, walk: reply.walk }]);
+      setMessages((m) => [...m, { id: nextId(), role: "assistant", text: reply.message, walk: reply.walk, musicCrawlerLink }]);
       if (reply.walk) onWalk(reply.walk);
     } catch (e) {
       setMessages((m) => [...m, { id: nextId(), role: "assistant", text: `Honk… something went wrong: ${(e as Error).message}`, error: true }]);
@@ -101,6 +103,14 @@ export function GeeslingPanel({ origin, freeOnly, onWalk, onSelectStop }: Props)
                 <Text style={text.body}>{item.text}</Text>
               </Panel>
               {item.walk ? <WalkCard walk={item.walk} onShowOnMap={onWalk} onSelectStop={onSelectStop} /> : null}
+              {item.musicCrawlerLink ? (
+                <PixelButton
+                  label="Browse live music on MusicCrawler"
+                  icon="🎸"
+                  small
+                  onPress={() => void Linking.openURL("https://musiccrawler.live/calendar/")}
+                />
+              ) : null}
             </View>
           )
         }

@@ -92,6 +92,7 @@ export interface ChatMessage {
   text: string;
   walk?: Walk | null;
   error?: boolean;
+  musicCrawlerLink?: boolean;
 }
 
 export interface Bounds {

@@ -217,6 +217,14 @@ function placeForModel(p: PlaceItem) {
     rating: p.rating,
     reviews: p.rating_count,
     open_now: p.open_now,
+    hours: p.hours,
+    google_review_excerpts: p.review_evidence?.map((review) => ({
+      rating: review.rating,
+      published: review.published,
+      author: review.author,
+      text: review.text,
+      google_review_link: review.url,
+    })) ?? [],
     summary: p.summary,
   };
 }
@@ -491,7 +499,15 @@ Deno.serve(async (req) => {
 
   const chosen = (presented as PresentWalkInput).stops.slice(0, 8);
   const stops = await buildStops(chosen, known, origin, start, placesKey);
-  const lastLeave = stops.length ? new Date(stops[stops.length - 1].leave_at) : start;
+  // Google review content is transient evidence for ranking; keep only the
+  // permanent place ID and derived recommendation in the stored walk.
+  const safeStops = stops.map((stop) => {
+    if (stop.item.kind !== "place") return stop;
+    const place = { ...stop.item };
+    delete place.review_evidence;
+    return { ...stop, item: place };
+  });
+  const lastLeave = safeStops.length ? new Date(safeStops[safeStops.length - 1].leave_at) : start;
   const walk = {
     id: walkId(),
     owner,
@@ -502,7 +518,7 @@ Deno.serve(async (req) => {
     time_budget_minutes: budget,
     start_lat: origin?.lat ?? null,
     start_lng: origin?.lng ?? null,
-    stops,
+    stops: safeStops,
     total_minutes: Math.round((lastLeave.getTime() - start.getTime()) / 60_000),
     created_at: new Date().toISOString(),
   };

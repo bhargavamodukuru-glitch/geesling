@@ -26,7 +26,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
   const free = item.is_free;
   const isPhotoSpot = item.kind === "place" && item.types.includes("photography_spot");
   const title = item.kind === "event" ? item.title : item.name;
-  const link = item.kind === "event" ? (item.ticket_url ?? item.url) : (item.website ?? item.maps_url);
+  const link = item.kind === "event" ? (item.ticket_url ?? item.url) : item.website;
 
   return (
     <Panel style={[styles.sheet, maxHeight !== undefined && { maxHeight: Math.max(160, maxHeight) }]} shadow={5}>
@@ -88,7 +88,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
           <>
             <Text style={text.body}>
               {placeType(item)}
-              {item.rating ? ` · ⭐ ${item.rating} (${item.rating_count ?? 0})` : ""}
+              {item.rating ? ` · ⭐ ${item.rating} (${item.rating_count ?? 0} Google reviews)` : ""}
             </Text>
             {item.open_now !== null ? <Text style={text.small}>{item.open_now ? "🟢 Open now" : "🔴 Closed right now"}</Text> : null}
             {item.address ? <Text style={text.small}>📍 {item.address}</Text> : null}
@@ -102,9 +102,12 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
       <View style={styles.actions}>
         <PixelButton label="Walk there" icon="🪿" tone="gold" small onPress={() => openDirections(item)} />
         <PixelButton label="TTC" icon="🚋" small onPress={() => openDirections(item, true)} />
+        {item.kind === "place" && item.maps_url ? (
+          <PixelButton label="Google Maps & reviews" small onPress={() => void Linking.openURL(item.maps_url!)} />
+        ) : null}
         {link ? (
           <PixelButton
-            label={item.kind === "event" && item.rsvp_required ? "RSVP / Tickets" : isPhotoSpot && !item.website ? "Open in Maps" : "Website"}
+            label={item.kind === "event" && item.rsvp_required ? "RSVP / Tickets" : "Website"}
             tone={item.kind === "event" && item.rsvp_required ? "red" : "paper"}
             small
             onPress={() => void Linking.openURL(link)}
