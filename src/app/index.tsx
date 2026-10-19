@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Header } from "@/components/Header";
 import { ItemSheet } from "@/components/ItemSheet";
@@ -40,6 +40,35 @@ function Home() {
   const [focusKey, setFocusKey] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
   const [mapHeight, setMapHeight] = useState<number | undefined>(undefined);
+  const [mapShare, setMapShare] = useState(() =>
+    wide ? Math.max(0.25, Math.min(0.75, (width - 460) / width)) : 0.45,
+  );
+  const [splitLength, setSplitLength] = useState(0);
+  const mapShareRef = useRef(mapShare);
+  const splitLengthRef = useRef(splitLength);
+  const dragStartShare = useRef(mapShare);
+  mapShareRef.current = mapShare;
+  splitLengthRef.current = splitLength;
+
+  const resizeHandle = useMemo(
+    () => PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        dragStartShare.current = mapShareRef.current;
+      },
+      onPanResponderMove: (_event, gesture) => {
+        const length = splitLengthRef.current;
+        if (length <= 0) return;
+        const delta = wide ? gesture.dx : gesture.dy;
+        const next = Math.max(0.25, Math.min(0.75, dragStartShare.current + delta / length));
+        mapShareRef.current = next;
+        setMapShare(next);
+      },
+      onPanResponderTerminationRequest: () => false,
+    }),
+    [wide],
+  );
 
   // Debounce map movement so panning doesn't spam the database.
   const boundsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -155,25 +184,40 @@ function Home() {
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
       <Header onNearMe={() => void nearMe()} onRefresh={() => setReloadKey((k) => k + 1)} locating={status === "locating"} />
-      {wide ? (
-        <View style={styles.row}>
-          {map}
-          {panel}
+      <View
+        style={[styles.layout, wide ? styles.row : styles.column]}
+        onLayout={(event) => setSplitLength(wide ? event.nativeEvent.layout.width : event.nativeEvent.layout.height)}
+      >
+        <View style={[styles.mapArea, { flex: mapShare }]}>{map}</View>
+        <View
+          {...resizeHandle.panHandlers}
+          style={[styles.resizeHandle, wide ? styles.resizeHandleVertical : styles.resizeHandleHorizontal]}
+          accessibilityRole="adjustable"
+          accessibilityLabel="Resize map and controls panel"
+          accessibilityHint="Drag to give more space to the map or the controls panel"
+        >
+          <View style={[styles.resizeGrip, wide ? styles.resizeGripVertical : styles.resizeGripHorizontal]} />
         </View>
-      ) : (
-        <View style={{ flex: 1 }}>
-          <View style={{ flex: 0.9 }}>{map}</View>
-          <View style={{ flex: 1.1 }}>{panel}</View>
-        </View>
-      )}
+        <View style={[styles.panelArea, { flex: 1 - mapShare }]}>{panel}</View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.parchment },
-  row: { flex: 1, flexDirection: "row" },
+  layout: { flex: 1 },
+  row: { flexDirection: "row" },
+  column: { flexDirection: "column" },
+  mapArea: { minWidth: 0, minHeight: 0 },
+  panelArea: { minWidth: 0, minHeight: 0 },
   mapWrap: { flex: 1, backgroundColor: colors.grass, overflow: "hidden" },
+  resizeHandle: { backgroundColor: colors.wood, borderColor: colors.ink, alignItems: "center", justifyContent: "center", zIndex: 5 },
+  resizeHandleHorizontal: { width: "100%", height: 24, borderTopWidth: 2, borderBottomWidth: 2, cursor: "row-resize" as never },
+  resizeHandleVertical: { width: 24, height: "100%", borderLeftWidth: 2, borderRightWidth: 2, cursor: "col-resize" as never },
+  resizeGrip: { backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
+  resizeGripHorizontal: { width: 48, height: 6 },
+  resizeGripVertical: { width: 6, height: 48 },
   walkBanner: {
     position: "absolute",
     top: 10,
@@ -189,8 +233,8 @@ const styles = StyleSheet.create({
   },
   walkBannerText: { flex: 1, fontFamily: fonts.heading, fontSize: 14, color: colors.ink },
   sheetWrap: { position: "absolute", left: 10, right: 10, bottom: 10, maxWidth: 520, alignSelf: "center" },
-  panel: { flex: 1, borderTopWidth: 3, borderColor: colors.ink, backgroundColor: colors.parchment },
-  panelWide: { flexGrow: 0, flexShrink: 0, flexBasis: 460, width: 460, borderTopWidth: 0, borderLeftWidth: 3 },
+  panel: { flex: 1, borderTopWidth: 0, borderColor: colors.ink, backgroundColor: colors.parchment },
+  panelWide: { borderLeftWidth: 0 },
   tabs: { flexDirection: "row", borderBottomWidth: 3, borderColor: colors.ink },
   tab: { flex: 1, paddingVertical: 10, alignItems: "center", backgroundColor: colors.paper, borderRightWidth: 2, borderColor: colors.ink },
   tabActive: { backgroundColor: colors.accent },
