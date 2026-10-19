@@ -47,26 +47,32 @@ function Home() {
   const mapShareRef = useRef(mapShare);
   const splitLengthRef = useRef(splitLength);
   const dragStartShare = useRef(mapShare);
-  mapShareRef.current = mapShare;
-  splitLengthRef.current = splitLength;
+
+  useEffect(() => {
+    mapShareRef.current = mapShare;
+    splitLengthRef.current = splitLength;
+  }, [mapShare, splitLength]);
 
   const resizeHandle = useMemo(
+    // PanResponder retains these callbacks and invokes them only for drag
+    // events; the referenced values are synchronized in the effect above.
+    // eslint-disable-next-line react-hooks/refs
     () => PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        dragStartShare.current = mapShareRef.current;
-      },
-      onPanResponderMove: (_event, gesture) => {
-        const length = splitLengthRef.current;
-        if (length <= 0) return;
-        const delta = wide ? gesture.dx : gesture.dy;
-        const next = Math.max(0.25, Math.min(0.75, dragStartShare.current + delta / length));
-        mapShareRef.current = next;
-        setMapShare(next);
-      },
-      onPanResponderTerminationRequest: () => false,
-    }),
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          dragStartShare.current = mapShareRef.current;
+        },
+        onPanResponderMove: (_event, gesture) => {
+          const length = splitLengthRef.current;
+          if (length <= 0) return;
+          const delta = wide ? gesture.dx : gesture.dy;
+          const next = Math.max(0.25, Math.min(0.75, dragStartShare.current + delta / length));
+          mapShareRef.current = next;
+          setMapShare(next);
+        },
+        onPanResponderTerminationRequest: () => false,
+      }),
     [wide],
   );
 
