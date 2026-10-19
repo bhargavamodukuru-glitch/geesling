@@ -2,18 +2,20 @@ import type { MapItem } from "./types";
 
 export interface SocialLink {
   label: string;
-  icon: string;
+  platform: string;
   url: string;
 }
 
-const PLATFORMS: { hosts: string[]; label: string; icon: string }[] = [
-  { hosts: ["instagram.com", "www.instagram.com"], label: "Instagram", icon: "📸" },
-  { hosts: ["facebook.com", "www.facebook.com", "fb.com", "www.fb.com"], label: "Facebook", icon: "f" },
-  { hosts: ["tiktok.com", "www.tiktok.com"], label: "TikTok", icon: "♪" },
-  { hosts: ["x.com", "www.x.com", "twitter.com", "www.twitter.com"], label: "X", icon: "𝕏" },
-  { hosts: ["youtube.com", "www.youtube.com", "youtu.be"], label: "YouTube", icon: "▶" },
-  { hosts: ["threads.net", "www.threads.net"], label: "Threads", icon: "@" },
+const PLATFORMS: { hosts: string[]; label: string; platform: string }[] = [
+  { hosts: ["instagram.com"], label: "Instagram", platform: "instagram" },
+  { hosts: ["facebook.com", "fb.com"], label: "Facebook", platform: "facebook" },
+  { hosts: ["tiktok.com"], label: "TikTok", platform: "tiktok" },
+  { hosts: ["x.com", "twitter.com"], label: "X", platform: "x" },
+  { hosts: ["youtube.com", "youtu.be"], label: "YouTube", platform: "youtube" },
+  { hosts: ["threads.net"], label: "Threads", platform: "threads" },
 ];
+
+const SOCIAL_URL_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|facebook\.com|fb\.com|tiktok\.com|x\.com|twitter\.com|youtube\.com|youtu\.be|threads\.net)(?:\/[^\s<>"')\]]*)?/gi;
 
 /** Extract only recognized social links that are explicitly present on the listing. */
 export function socialLinksForItem(item: MapItem): SocialLink[] {
@@ -24,14 +26,15 @@ export function socialLinksForItem(item: MapItem): SocialLink[] {
 
   for (const source of sources) {
     if (!source) continue;
-    const candidates: string[] = source.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [];
-    if (/^https?:\/\//i.test(source.trim())) candidates.push(source.trim());
+    const candidates: string[] = source.match(SOCIAL_URL_PATTERN) ?? [];
     for (const candidate of candidates) {
       try {
-        const parsed = new URL(candidate.replace(/[.,;!?]+$/, ""));
+        const normalized = candidate.startsWith("http") ? candidate : `https://${candidate}`;
+        const parsed = new URL(normalized.replace(/[.,;!?]+$/, ""));
         if (parsed.protocol !== "https:" && parsed.protocol !== "http:") continue;
-        const platform = PLATFORMS.find(({ hosts }) => hosts.includes(parsed.hostname.toLowerCase()));
-        if (platform) urls.add(`${platform.label}\u0000${parsed.toString()}`);
+        const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+        const platform = PLATFORMS.find(({ hosts }) => hosts.includes(host));
+        if (platform) urls.add(`${platform.label}\u0000${platform.platform}\u0000${parsed.toString()}`);
       } catch {
         // Ignore malformed URLs from third-party listing text.
       }
@@ -39,8 +42,18 @@ export function socialLinksForItem(item: MapItem): SocialLink[] {
   }
 
   return [...urls].map((value) => {
-    const [label, url] = value.split("\u0000");
-    const platform = PLATFORMS.find((entry) => entry.label === label)!;
-    return { label, icon: platform.icon, url };
+    const [label, platform, url] = value.split("\u0000");
+    return { label, platform, url };
   });
+}
+
+export function descriptionWithoutSocialLinks(item: MapItem): string | null {
+  if (item.kind !== "event" || !item.description) return null;
+  const description = item.description
+    .replace(SOCIAL_URL_PATTERN, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return description || null;
 }

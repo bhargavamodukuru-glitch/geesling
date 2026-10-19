@@ -1,10 +1,10 @@
 import * as Linking from "expo-linking";
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Panel, PixelButton, Tag } from "@/components/Pixel";
 import { useSaved } from "@/hooks/useSaved";
 import { placeType, priceLabel, whenLabel } from "@/lib/format";
 import { openDirections } from "@/lib/links";
-import { socialLinksForItem } from "@/lib/socialLinks";
+import { descriptionWithoutSocialLinks, socialLinksForItem } from "@/lib/socialLinks";
 import { CATEGORY_LABELS, colors, fonts, text } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
 
@@ -29,6 +29,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
   const title = item.kind === "event" ? item.title : item.name;
   const link = item.kind === "event" ? (item.ticket_url ?? item.url) : item.website;
   const socialLinks = socialLinksForItem(item);
+  const description = descriptionWithoutSocialLinks(item);
 
   return (
     <Panel style={[styles.sheet, maxHeight !== undefined && { maxHeight: Math.max(160, maxHeight) }]} shadow={5}>
@@ -79,9 +80,9 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
                 <Tag key={c} label={`${CATEGORY_LABELS[c]?.emoji ?? ""} ${CATEGORY_LABELS[c]?.label ?? c}`} color={colors.parchmentDark} textColor={colors.ink} />
               ))}
             </View>
-            {item.description ? (
+            {description ? (
               <Text style={text.small} numberOfLines={8}>
-                {item.description}
+                {description}
               </Text>
             ) : null}
             <Text style={styles.source}>Listed by {SOURCE_NAMES[item.source] ?? item.source}</Text>
@@ -116,13 +117,24 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
           />
         ) : null}
         {socialLinks.map((social) => (
-          <PixelButton
+          <Pressable
             key={social.url}
-            label={social.label}
-            icon={social.icon}
-            small
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${social.label} profile`}
             onPress={() => void Linking.openURL(social.url)}
-          />
+            style={({ pressed }) => [styles.socialButton, pressed && { transform: [{ translateX: 2 }, { translateY: 2 }] }]}
+          >
+            {social.platform === "instagram" ? (
+              <View style={styles.instagramLogo}>
+                <View style={styles.instagramLens} />
+                <View style={styles.instagramDot} />
+              </View>
+            ) : (
+              <Text style={[styles.socialMark, social.platform === "facebook" && styles.facebookMark, social.platform === "youtube" && styles.youtubeMark]}>
+                {social.platform === "facebook" ? "f" : social.platform === "tiktok" ? "♪" : social.platform === "youtube" ? "▶" : social.platform === "threads" ? "@" : "𝕏"}
+              </Text>
+            )}
+          </Pressable>
         ))}
         <PixelButton label={saved ? "Saved" : "Save"} icon={saved ? "★" : "☆"} small active={saved} onPress={() => void toggle(item.kind, item.id, item)} />
       </View>
@@ -142,4 +154,19 @@ const styles = StyleSheet.create({
   rsvpTitle: { fontFamily: fonts.heading, fontSize: 13, color: colors.accent },
   source: { fontFamily: fonts.body, fontSize: 16, color: colors.inkSoft },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  socialButton: {
+    width: 40,
+    height: 40,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    backgroundColor: colors.paper,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  instagramLogo: { width: 23, height: 23, borderRadius: 7, borderWidth: 2.5, borderColor: "#C13584", alignItems: "center", justifyContent: "center" },
+  instagramLens: { width: 9, height: 9, borderRadius: 5, borderWidth: 2, borderColor: "#C13584" },
+  instagramDot: { position: "absolute", width: 3, height: 3, borderRadius: 2, backgroundColor: "#C13584", top: 3, right: 3 },
+  socialMark: { fontFamily: fonts.heading, fontSize: 22, lineHeight: 25, color: colors.ink },
+  facebookMark: { color: "#1877F2", fontSize: 27 },
+  youtubeMark: { color: "#FF0000", fontSize: 19 },
 });
