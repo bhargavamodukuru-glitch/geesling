@@ -84,6 +84,21 @@ const ALCOHOL_TYPES = new Set([
 
 const PRICE_LEVELS = ["PRICE_LEVEL_INEXPENSIVE", "PRICE_LEVEL_MODERATE", "PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"];
 
+function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const radians = (degrees: number) => (degrees * Math.PI) / 180;
+  const dLat = radians(b.lat - a.lat);
+  const dLng = radians(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(radians(a.lat)) * Math.cos(radians(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 6_371_000 * 2 * Math.asin(Math.sqrt(h));
+}
+
+function localQualityScore(place: PlaceItem, near: { lat: number; lng: number }, radiusMeters: number): number {
+  const ratingEvidence = place.rating === null ? 0 : place.rating * 1.2;
+  const reviewEvidence = place.rating_count === null ? 0 : Math.min(Math.log10(place.rating_count + 1), 4) * 0.55;
+  const distancePenalty = Math.min(distanceMeters(near, place) / Math.max(radiusMeters, 1), 1) * 1.25;
+  return ratingEvidence + reviewEvidence - distancePenalty;
+}
+
 export type MaxPrice = "inexpensive" | "moderate" | "expensive" | "any";
 
 export interface PlaceSearch {
@@ -152,7 +167,10 @@ export async function searchPlaces(apiKey: string, search: PlaceSearch): Promise
   });
   if (!response.ok) throw new Error(`Places search failed: ${response.status} ${await response.text()}`);
   const data = (await response.json()) as { places?: GooglePlace[] };
-  const items = (data.places ?? []).map(toPlaceItem).filter((p): p is PlaceItem => p !== null);
+  const items = (data.places ?? [])
+    .map(toPlaceItem)
+    .filter((p): p is PlaceItem => p !== null)
+    .sort((a, b) => localQualityScore(b, search.near, search.radiusMeters) - localQualityScore(a, search.near, search.radiusMeters));
   if (search.maxPrice === "any") return items;
   // Filter here rather than with the API's priceLevels, which drops places with no price
   // info (parks, markets, libraries) — exactly the free spots a budget walk wants.

@@ -9,6 +9,7 @@ import { bestLeg, type Leg } from "./routes.ts";
 
 const DOWNTOWN = { lat: 43.6532, lng: -79.3832 };
 const MAX_TURNS = 5;
+const MAX_INTERSTOP_TRAVEL_SECONDS = 20 * 60;
 const HOURLY_LIMIT = Number(Deno.env.get("GUIDE_HOURLY_LIMIT") ?? 20);
 
 const corsHeaders = {
@@ -393,6 +394,7 @@ Deno.serve(async (req) => {
   const known = new Map<string, Item>();
   let finalText = "";
   let presented: PresentWalkInput | null = null;
+  let validatedStops: WalkStop[] | null = null;
 
   try {
     for (let turn = 0; turn < MAX_TURNS && !presented; turn++) {
@@ -446,7 +448,7 @@ Deno.serve(async (req) => {
               const places = await searchPlaces(placesKey, {
                 query,
                 near: isLatLng(input.near) ? input.near : searchOrigin,
-                radiusMeters: typeof input.radius_m === "number" ? input.radius_m : 2500,
+                radiusMeters: typeof input.radius_m === "number" ? input.radius_m : 1200,
                 maxPrice: freeOnly ? "inexpensive" : ((["inexpensive", "moderate", "expensive", "any"] as const).find((p) => p === input.max_price) ?? "any") as MaxPrice,
                 openNow: input.open_now === true,
                 limit: typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 10) : 6,
@@ -470,6 +472,18 @@ Deno.serve(async (req) => {
                   is_error: true,
                 };
               }
+              const candidateStops = await buildStops(walk.stops.slice(0, 8), known, origin, start, placesKey);
+              const longHops = candidateStops.slice(1).filter((stop) => stop.leg && stop.leg.duration_s > MAX_INTERSTOP_TRAVEL_SECONDS);
+              if (longHops.length) {
+                const details = longHops.map((stop) => `${stop.item.kind === "event" ? stop.item.title : stop.item.name} (${Math.ceil((stop.leg!.duration_s) / 60)} min from the previous stop)`).join("; ");
+                return {
+                  type: "tool_result",
+                  tool_use_id: tool.id,
+                  content: `This route exceeds the 20-minute travel limit between stops: ${details}. Keep the requested anchor and order, then search for a nearby replacement within 800–1200 m of the preceding stop. Prefer highly rated places with substantial review counts. If no suitable nearby replacement exists, omit that stop and present a shorter walk.`,
+                  is_error: true,
+                };
+              }
+              validatedStops = candidateStops;
               presented = walk;
               return { type: "tool_result", tool_use_id: tool.id, content: "Walk presented." };
             }
@@ -498,7 +512,7 @@ Deno.serve(async (req) => {
   }
 
   const chosen = (presented as PresentWalkInput).stops.slice(0, 8);
-  const stops = await buildStops(chosen, known, origin, start, placesKey);
+  const stops = validatedStops ?? await buildStops(chosen, known, origin, start, placesKey);
   // Google review content is transient evidence for ranking; keep only the
   // permanent place ID and derived recommendation in the stored walk.
   const safeStops = stops.map((stop) => {
