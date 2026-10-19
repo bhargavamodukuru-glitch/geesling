@@ -31,7 +31,9 @@ async function main(): Promise<void> {
 
   const config: IngestConfig = {
     now: startedAt,
-    horizonDays: Number(env("INGEST_HORIZON_DAYS") ?? 90),
+    // Keep the calendar useful for long-range planning, including concerts
+    // whose tickets go on sale months before the show.
+    horizonDays: Number(env("INGEST_HORIZON_DAYS") ?? 365),
     ticketmasterApiKey: env("TICKETMASTER_API_KEY"),
     eventbriteToken: env("EVENTBRITE_TOKEN"),
     eventbriteOrganizerIds: organizerIds,

@@ -96,7 +96,7 @@ Optional: for the Stardew map look on the web, create a Cloud **Map ID**, paste 
    insert into eventbrite_organizers (id, name) values ('1234567890', 'Some Toronto Collective');
    ```
 3. In GitHub → Settings → Secrets → Actions, add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TICKETMASTER_API_KEY`, and `EVENTBRITE_TOKEN`.
-4. The **Ingest Toronto events** workflow runs every 3 hours. Trigger it once from the Actions tab.
+4. The **Ingest Toronto events** workflow runs every 3 hours and after ingestion changes on `main`. It imports confirmed events up to 365 days ahead. Set `INGEST_HORIZON_DAYS` to override that window.
 
 Run it locally:
 
