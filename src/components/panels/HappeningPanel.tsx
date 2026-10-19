@@ -42,7 +42,6 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
         ))}
         <PixelButton label={`📅 ${selectedLabel}`} small active={Boolean(filters.date) || calendarOpen} onPress={() => setCalendarOpen((open) => !open)} />
         {filters.date ? <PixelButton label="✕" small onPress={() => onFilters({ ...filters, date: null })} /> : null}
-        <PixelButton label="Free only" icon="🟩" small tone={filters.freeOnly ? "green" : "paper"} onPress={() => onFilters({ ...filters, freeOnly: !filters.freeOnly })} />
       </ScrollView>
       {calendarOpen ? (
         <View style={styles.calendar}>
@@ -96,12 +95,13 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
         ))}
       </ScrollView>
 
-      <View style={styles.legend}>
-        <Tag label="Free" color={colors.free} />
-        <Tag label="Paid" color={colors.paid} />
-        <Text style={text.small}>🍻 drinks · 🎟️ RSVP ahead</Text>
-        <Text style={[text.small, { marginLeft: "auto" }]}>{loading ? "Scouting…" : `${events.length} in view`}</Text>
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.filterChips}>
+        <PixelButton label="Free" icon="🟩" small tone="green" active={filters.freeOnly} onPress={() => onFilters({ ...filters, freeOnly: !filters.freeOnly, paidOnly: false })} />
+        <PixelButton label="Paid" icon="🟪" small tone="purple" active={filters.paidOnly} onPress={() => onFilters({ ...filters, paidOnly: !filters.paidOnly, freeOnly: false })} />
+        <PixelButton label="Drinks" icon="🍻" small active={filters.drinksOnly} onPress={() => onFilters({ ...filters, drinksOnly: !filters.drinksOnly })} />
+        <PixelButton label="RSVP ahead" icon="🎟️" small active={filters.rsvpOnly} onPress={() => onFilters({ ...filters, rsvpOnly: !filters.rsvpOnly })} />
+        <Text style={[text.small, { marginLeft: 4, alignSelf: "center" }]}>{loading ? "Scouting…" : `${events.length} in view`}</Text>
+      </ScrollView>
 
       {error ? <Text style={[text.small, styles.error]}>Couldn’t load events: {error}</Text> : null}
 
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   selectedDayText: { color: colors.white },
   todayDay: { borderWidth: 2, borderColor: colors.gold },
   calendarHint: { ...text.small, textAlign: "center", paddingTop: 4 },
-  legend: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 4 },
+  filterChips: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 4 },
   error: { color: colors.accent, paddingHorizontal: 12 },
   empty: { alignItems: "center", gap: 10, padding: 24 },
   row: { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: colors.paper, borderWidth: 3, borderColor: colors.ink, padding: 8 },

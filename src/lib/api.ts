@@ -29,7 +29,12 @@ export async function fetchEventsInBounds(bounds: Bounds, filters: EventFilters)
   });
   if (error) throw new Error(error.message);
   const events = ((data ?? []) as EventRow[]).map(toEvent);
-  return filters.window === "now" ? events.filter((e) => e.is_live) : events;
+  return events.filter((event) =>
+    (!filters.paidOnly || !event.is_free) &&
+    (!filters.drinksOnly || event.involves_alcohol) &&
+    (!filters.rsvpOnly || event.rsvp_required) &&
+    (filters.window !== "now" || event.is_live)
+  );
 }
 
 export interface GuideInput {

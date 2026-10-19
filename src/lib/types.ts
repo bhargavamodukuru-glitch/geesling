@@ -108,6 +108,9 @@ export interface EventFilters {
   /** Selected Toronto calendar date (YYYY-MM-DD), or null to use the time window. */
   date: string | null;
   freeOnly: boolean;
+  paidOnly: boolean;
+  drinksOnly: boolean;
+  rsvpOnly: boolean;
   categories: string[];
 }
 
