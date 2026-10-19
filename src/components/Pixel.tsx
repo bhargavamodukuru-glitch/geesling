@@ -90,11 +90,13 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   buttonText: {
-    fontFamily: fonts.headingRegular,
-    fontSize: 14,
+    fontFamily: fonts.body,
+    fontSize: 19,
+    lineHeight: 21,
   },
   buttonTextSmall: {
-    fontSize: 12,
+    fontSize: 16,
+    lineHeight: 18,
   },
   tag: {
     borderWidth: 2,

@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   wrap: { width: PIN_WIDTH, height: PIN_HEIGHT, alignItems: "center", justifyContent: "flex-end" },
   label: { borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 4, marginBottom: 2 },
   labelSpacer: { height: 18 },
-  labelText: { fontFamily: fonts.heading, fontSize: 10 },
+  labelText: { fontFamily: fonts.body, fontSize: 18, lineHeight: 18 },
   row: { flexDirection: "row", alignItems: "center" },
   sideSpacer: { width: 22 },
   side: { width: 22, alignItems: "flex-start" },
