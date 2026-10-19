@@ -19,6 +19,7 @@ interface Props {
 
 export function HappeningPanel({ events, loading, error, filters, onFilters, onSelect }: Props) {
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const [year, month] = torontoDay(new Date()).split("-").map(Number);
     return new Date(Date.UTC(year, month - 1, 1));
@@ -33,16 +34,18 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
   const selectedLabel = filters.date
     ? new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" }).format(new Date(`${filters.date}T12:00:00Z`))
     : "Choose date";
+  const activeFilterCount = Number(filters.freeOnly || filters.paidOnly) + Number(filters.drinksOnly) + Number(filters.rsvpOnly) + filters.categories.length;
+  const visibleDateLabel = filters.date
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", month: "short", day: "numeric" }).format(new Date(`${filters.date}T12:00:00Z`))
+    : "Date";
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chips}>
-        {(Object.keys(WINDOW_LABELS) as TimeWindow[]).map((w) => (
-          <PixelButton key={w} label={WINDOW_LABELS[w]} small active={!filters.date && filters.window === w} onPress={() => onFilters({ ...filters, window: w, date: null })} />
-        ))}
-        <PixelButton label={`📅 ${selectedLabel}`} small active={Boolean(filters.date) || calendarOpen} onPress={() => setCalendarOpen((open) => !open)} />
-        {filters.date ? <PixelButton label="✕" small onPress={() => onFilters({ ...filters, date: null })} /> : null}
-      </ScrollView>
+      <View style={styles.toolbar}>
+        <PixelButton label={activeFilterCount ? `Filters (${activeFilterCount})` : "Filters"} icon="☰" small active={filtersOpen} onPress={() => setFiltersOpen((open) => !open)} accessibilityLabel={`Filters${activeFilterCount ? `, ${activeFilterCount} selected` : ""}`} />
+        <PixelButton label={visibleDateLabel} icon="📅" small active={Boolean(filters.date) || calendarOpen} onPress={() => setCalendarOpen((open) => !open)} accessibilityLabel={selectedLabel} />
+        <Text style={[text.small, styles.resultCount]}>{loading ? "Scouting…" : `${events.length} events`}</Text>
+      </View>
       {calendarOpen ? (
         <View style={styles.calendar}>
           <View style={styles.monthHeader}>
@@ -82,26 +85,29 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
           <Text style={styles.calendarHint}>Pick today or any future date in Toronto</Text>
         </View>
       ) : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chips}>
-        {BROWSE_CATEGORIES.map((c) => (
-          <PixelButton
-            key={c}
-            label={CATEGORY_LABELS[c].label}
-            icon={CATEGORY_LABELS[c].emoji}
-            small
-            active={filters.categories.includes(c)}
-            onPress={() => toggleCategory(c)}
-          />
-        ))}
-      </ScrollView>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.filterChips}>
-        <PixelButton label="Free" icon="🟩" small tone="green" active={filters.freeOnly} onPress={() => onFilters({ ...filters, freeOnly: !filters.freeOnly, paidOnly: false })} />
-        <PixelButton label="Paid" icon="🟪" small tone="purple" active={filters.paidOnly} onPress={() => onFilters({ ...filters, paidOnly: !filters.paidOnly, freeOnly: false })} />
-        <PixelButton label="Drinks" icon="🍻" small active={filters.drinksOnly} onPress={() => onFilters({ ...filters, drinksOnly: !filters.drinksOnly })} />
-        <PixelButton label="RSVP ahead" icon="🎟️" small active={filters.rsvpOnly} onPress={() => onFilters({ ...filters, rsvpOnly: !filters.rsvpOnly })} />
-        <Text style={[text.small, { marginLeft: 4, alignSelf: "center" }]}>{loading ? "Scouting…" : `${events.length} in view`}</Text>
-      </ScrollView>
+      {filtersOpen ? (
+        <View style={styles.filtersPanel}>
+          <Text style={styles.sectionTitle}>When</Text>
+          <View style={styles.optionRow}>
+            {(Object.keys(WINDOW_LABELS) as TimeWindow[]).map((w) => (
+              <PixelButton key={w} label={WINDOW_LABELS[w]} small active={!filters.date && filters.window === w} onPress={() => onFilters({ ...filters, window: w, date: null })} />
+            ))}
+          </View>
+          <Text style={styles.sectionTitle}>Categories</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryOptions}>
+            {BROWSE_CATEGORIES.map((c) => (
+              <PixelButton key={c} label={CATEGORY_LABELS[c].label} icon={CATEGORY_LABELS[c].emoji} small active={filters.categories.includes(c)} onPress={() => toggleCategory(c)} />
+            ))}
+          </ScrollView>
+          <Text style={styles.sectionTitle}>More filters</Text>
+          <View style={styles.optionRow}>
+            <PixelButton label="Free" icon="🟩" small tone="green" active={filters.freeOnly} onPress={() => onFilters({ ...filters, freeOnly: !filters.freeOnly, paidOnly: false })} />
+            <PixelButton label="Paid" icon="🟪" small tone="purple" active={filters.paidOnly} onPress={() => onFilters({ ...filters, paidOnly: !filters.paidOnly, freeOnly: false })} />
+            <PixelButton label="Drinks" icon="🍻" small active={filters.drinksOnly} onPress={() => onFilters({ ...filters, drinksOnly: !filters.drinksOnly })} />
+            <PixelButton label="RSVP ahead" icon="🎟️" small active={filters.rsvpOnly} onPress={() => onFilters({ ...filters, rsvpOnly: !filters.rsvpOnly })} />
+          </View>
+        </View>
+      ) : null}
 
       {error ? <Text style={[text.small, styles.error]}>Couldn’t load events: {error}</Text> : null}
 
@@ -144,7 +150,12 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
 
 const styles = StyleSheet.create({
   chipScroll: { flexGrow: 0, flexShrink: 0 },
-  chips: { gap: 6, alignItems: "center", paddingHorizontal: 12, paddingVertical: 6 },
+  toolbar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  resultCount: { marginLeft: "auto" },
+  filtersPanel: { marginHorizontal: 12, marginBottom: 6, padding: 10, gap: 4, backgroundColor: colors.parchment, borderWidth: 2, borderColor: colors.ink },
+  sectionTitle: { fontFamily: fonts.headingRegular, fontSize: 17, color: colors.ink, marginTop: 3 },
+  optionRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center", paddingVertical: 4 },
+  categoryOptions: { flexDirection: "row", gap: 6, alignItems: "center", paddingVertical: 4 },
   calendar: { marginHorizontal: 12, marginBottom: 6, padding: 10, backgroundColor: colors.paper, borderWidth: 3, borderColor: colors.ink },
   monthHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
   monthArrow: { width: 36, height: 32, alignItems: "center", justifyContent: "center", backgroundColor: colors.gold, borderWidth: 2, borderColor: colors.ink },
@@ -160,7 +171,6 @@ const styles = StyleSheet.create({
   selectedDayText: { color: colors.white },
   todayDay: { borderWidth: 2, borderColor: colors.gold },
   calendarHint: { ...text.small, textAlign: "center", paddingTop: 4 },
-  filterChips: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 4 },
   error: { color: colors.accent, paddingHorizontal: 12 },
   empty: { alignItems: "center", gap: 10, padding: 24 },
   row: { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: colors.paper, borderWidth: 3, borderColor: colors.ink, padding: 8 },
