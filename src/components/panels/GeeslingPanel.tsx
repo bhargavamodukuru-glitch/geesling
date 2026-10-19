@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as Linking from "expo-linking";
-import { ActivityIndicator, FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Goose } from "@/components/Goose";
+import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { WalkCard } from "@/components/WalkCard";
 import { askGeesling } from "@/lib/api";
@@ -31,6 +32,9 @@ const BUDGETS: { label: string; minutes: number | null }[] = [
 interface Props {
   origin: { lat: number; lng: number } | null;
   freeOnly: boolean;
+  initialPrompt: string | null;
+  onPromptConsumed: () => void;
+  onInitialPromptComplete: () => void;
   onWalk: (walk: Walk) => void;
   onSelectStop: (item: MapItem, why: string) => void;
 }
@@ -38,14 +42,15 @@ interface Props {
 let counter = 0;
 const nextId = () => `m${Date.now()}-${counter++}`;
 
-export function GeeslingPanel({ origin, freeOnly, onWalk, onSelectStop }: Props) {
+export function GeeslingPanel({ origin, freeOnly, initialPrompt, onPromptConsumed, onInitialPromptComplete, onWalk, onSelectStop }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [budget, setBudget] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const lastInitialPrompt = useRef<string | null>(null);
 
-  const send = async (prompt: string) => {
+  const send = useCallback(async (prompt: string, initial = false) => {
     const trimmed = prompt.trim();
     if (!trimmed || busy) return;
     const userMessage: ChatMessage = { id: nextId(), role: "user", text: trimmed };
@@ -62,9 +67,21 @@ export function GeeslingPanel({ origin, freeOnly, onWalk, onSelectStop }: Props)
       setMessages((m) => [...m, { id: nextId(), role: "assistant", text: `Honk… something went wrong: ${(e as Error).message}`, error: true }]);
     } finally {
       setBusy(false);
+      if (initial) onInitialPromptComplete();
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
-  };
+  }, [busy, messages, origin, budget, freeOnly, onWalk, onInitialPromptComplete]);
+
+  useEffect(() => {
+    if (!initialPrompt) {
+      lastInitialPrompt.current = null;
+      return;
+    }
+    if (lastInitialPrompt.current === initialPrompt) return;
+    lastInitialPrompt.current = initialPrompt;
+    onPromptConsumed();
+    void send(initialPrompt, true);
+  }, [initialPrompt, onPromptConsumed, send]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -73,7 +90,7 @@ export function GeeslingPanel({ origin, freeOnly, onWalk, onSelectStop }: Props)
         data={messages}
         keyExtractor={(m) => m.id}
         contentContainerStyle={{ gap: 10, padding: 12 }}
-        ListHeaderComponent={
+        ListHeaderComponent={messages.length === 0 ? (
           <View style={{ gap: 10 }}>
             <View style={styles.hello}>
               <Goose size={3} />
@@ -90,7 +107,7 @@ export function GeeslingPanel({ origin, freeOnly, onWalk, onSelectStop }: Props)
               ))}
             </ScrollView>
           </View>
-        }
+        ) : <View />}
         renderItem={({ item }) =>
           item.role === "user" ? (
             <View style={styles.userBubble}>
@@ -115,13 +132,7 @@ export function GeeslingPanel({ origin, freeOnly, onWalk, onSelectStop }: Props)
           )
         }
         ListFooterComponent={
-          busy ? (
-            <View style={styles.thinking}>
-              <Goose size={3} />
-              <Text style={text.body}>Waddling around the city…</Text>
-              <ActivityIndicator color={colors.wood} />
-            </View>
-          ) : undefined
+          busy ? <View style={styles.thinking}><GeeslingLoader label="Waddling around the city…" /></View> : undefined
         }
       />
 
@@ -155,7 +166,7 @@ export function GeeslingPanel({ origin, freeOnly, onWalk, onSelectStop }: Props)
             returnKeyType="send"
             editable={!busy}
           />
-          <PixelButton label="Ask" icon="🪿" tone="red" disabled={busy || !draft.trim()} onPress={() => void send(draft)} />
+          <PixelButton label="Ask" tone="red" disabled={busy || !draft.trim()} onPress={() => void send(draft)} />
         </View>
       </View>
     </View>

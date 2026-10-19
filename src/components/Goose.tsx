@@ -34,23 +34,31 @@ const PALETTE: Record<string, string> = {
 interface Props {
   size?: number; // pixel size in points
   walking?: boolean;
+  flapping?: boolean;
   flip?: boolean;
 }
 
-function GooseSprite({ size = 4, walking = true, flip = false }: Props) {
+function GooseSprite({ size = 4, walking = true, flapping = false, flip = false }: Props) {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
-    if (!walking) return;
-    const id = setInterval(() => setFrame((f) => (f + 1) % 2), 280);
+    if (!walking && !flapping) return;
+    const id = setInterval(() => setFrame((f) => (f + 1) % 2), flapping ? 170 : 280);
     return () => clearInterval(id);
-  }, [walking]);
+  }, [walking, flapping]);
 
-  const rows = [...BODY, ...(frame === 0 ? LEGS_A : LEGS_B)];
+  const body = flapping ? BODY.map((row, y) => {
+    // Pixel wings lift and lower around Geesling's body in alternating frames.
+    const wing = frame === 0
+      ? ({ 7: "..W.........W.", 8: ".WW.........WW", 9: "WW...........W" } as Record<number, string>)[y]
+      : ({ 9: "..............", 10: ".WW.........WW", 11: "..WW.......WW." } as Record<number, string>)[y];
+    return wing ? row.split("").map((cell, x) => wing[x] === "W" ? "W" : cell).join("") : row;
+  }) : BODY;
+  const rows = [...body, ...(walking && !flapping ? (frame === 0 ? LEGS_A : LEGS_B) : LEGS_A)];
   return (
     <View
       accessibilityRole="image"
       accessibilityLabel="Geesling the goose"
-      style={{ width: 14 * size, height: rows.length * size, transform: [{ scaleX: flip ? -1 : 1 }, { translateY: walking && frame === 1 ? -size / 2 : 0 }] }}
+      style={{ width: 14 * size, height: rows.length * size, transform: [{ scaleX: flip ? -1 : 1 }, { translateY: walking && frame === 1 ? -size / 2 : 0 }, { scaleY: flapping && frame === 1 ? 0.96 : 1 }] }}
     >
       {rows.map((row, y) => (
         <View key={y} style={{ flexDirection: "row", height: size }}>

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Goose } from "@/components/Goose";
+import { GeeslingWelcome } from "@/components/GeeslingWelcome";
+import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { ItemSheet } from "@/components/ItemSheet";
 import { CityMap } from "@/components/map/CityMap";
 import { GeeslingPanel } from "@/components/panels/GeeslingPanel";
@@ -29,6 +31,9 @@ function Home() {
   const { location } = useLocation();
   const { saved } = useSaved();
 
+  const [entered, setEntered] = useState(false);
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const [transition, setTransition] = useState<"walk" | "map" | null>(null);
   const [tab, setTab] = useState<Tab>("happening");
   const [filters, setFilters] = useState<EventFilters>({ window: "now", date: null, freeOnly: false, paidOnly: false, drinksOnly: false, rsvpOnly: false, categories: [] });
   const [bounds, setBounds] = useState<Bounds | null>(null);
@@ -107,10 +112,33 @@ function Home() {
   }, [bounds, filters, requestKey]);
 
   const showWalk = useCallback((next: Walk) => {
+    setTransition(null);
     setWalk(next);
+    setTab("geesling");
     setSelected(null);
     setFocusKey((k) => k + 1);
   }, []);
+
+  const startPrompt = useCallback((prompt: string) => {
+    setPendingPrompt(prompt);
+    setTransition("walk");
+    setEntered(true);
+    setTab("geesling");
+  }, []);
+  const skipToMap = useCallback(() => {
+    setTransition("map");
+    setTimeout(() => {
+      setEntered(true);
+      setTab("happening");
+      setTransition(null);
+    }, 800);
+  }, []);
+  const clearWalk = useCallback(() => {
+    setWalk(null);
+    setTab("happening");
+  }, []);
+  const consumePrompt = useCallback(() => setPendingPrompt(null), []);
+  const completePrompt = useCallback(() => setTransition(null), []);
 
   const selectItem = useCallback((item: MapItem | null, note: string | null = null) => {
     if (!item) return setSelected(null);
@@ -132,9 +160,9 @@ function Home() {
       {walk ? (
         <View style={styles.walkBanner}>
           <Text style={styles.walkBannerText} numberOfLines={1}>
-            🪿 {walk.title}
+            {walk.title}
           </Text>
-          <PixelButton label="Clear walk" small onPress={() => setWalk(null)} />
+          <PixelButton label="Clear walk" small onPress={clearWalk} />
         </View>
       ) : null}
       {selected ? (
@@ -147,7 +175,7 @@ function Home() {
 
   const panel = (
     <View style={[styles.panel, wide && styles.panelWide]}>
-      <View style={styles.tabs}>
+      {!walk ? <View style={styles.tabs}>
         {(
           [
             ["happening", "HAPPENING"],
@@ -168,7 +196,7 @@ function Home() {
             </View>
           </Pressable>
         ))}
-      </View>
+      </View> : null}
       <View style={{ flex: 1 }}>
         {tab === "happening" ? (
           <HappeningPanel
@@ -184,11 +212,23 @@ function Home() {
         {tab === "saved" ? <SavedPanel onSelect={(i) => selectItem(i)} onShowWalk={showWalk} /> : null}
         {/* Kept mounted so the conversation survives tab switches. */}
         <View style={[{ flex: 1 }, tab !== "geesling" && styles.hidden]}>
-          <GeeslingPanel origin={location} freeOnly={filters.freeOnly} onWalk={showWalk} onSelectStop={(item, why) => selectItem(item, why)} />
+          <GeeslingPanel
+            origin={location}
+            freeOnly={filters.freeOnly}
+            initialPrompt={pendingPrompt}
+            onPromptConsumed={consumePrompt}
+            onInitialPromptComplete={completePrompt}
+            onWalk={showWalk}
+            onSelectStop={(item, why) => selectItem(item, why)}
+          />
         </View>
       </View>
     </View>
   );
+
+  if (!entered) return transition === "map"
+    ? <GeeslingLoader label="Finding the live map…" />
+    : <GeeslingWelcome onAsk={startPrompt} onSkip={skipToMap} />;
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
@@ -208,12 +248,16 @@ function Home() {
         </View>
         <View style={[styles.panelArea, { flex: 1 - mapShare }]}>{panel}</View>
       </View>
+      {transition === "walk" ? (
+        <View style={styles.loadingCover}><GeeslingLoader label="Geesling is planning your walk…" /></View>
+      ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.parchment },
+  loadingCover: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 20 },
   layout: { flex: 1 },
   row: { flexDirection: "row" },
   column: { flexDirection: "column" },

@@ -103,7 +103,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
       </ScrollView>
 
       <View style={styles.actions}>
-        <PixelButton label="Walk there" icon="🪿" tone="gold" small onPress={() => openDirections(item)} />
+        <PixelButton label="Walk there" tone="gold" small onPress={() => openDirections(item)} />
         <PixelButton label="TTC" icon="🚋" small onPress={() => openDirections(item, true)} />
         {item.kind === "place" && item.maps_url ? (
           <PixelButton label="Google Maps & reviews" small onPress={() => void Linking.openURL(item.maps_url!)} />

@@ -4,9 +4,10 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SavedProvider } from "@/hooks/useSaved";
+import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { ensureSession, isConfigured } from "@/lib/supabase";
 import { colors } from "@/lib/theme";
 
@@ -20,11 +21,7 @@ export default function RootLayout() {
   // Web can render with system fallbacks while its custom fonts download; avoid
   // blocking the first usable screen on a phone's initial visit.
   if (Platform.OS !== "web" && !fontsLoaded) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.parchment }}>
-        <ActivityIndicator color={colors.wood} />
-      </View>
-    );
+    return <GeeslingLoader label="Geesling is getting ready…" />;
   }
 
   return (

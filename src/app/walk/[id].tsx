@@ -45,11 +45,11 @@ function SharedWalk() {
         <Header />
         <View style={styles.center}>
           <Panel style={{ alignItems: "center", gap: 10, maxWidth: 380 }}>
-            <Goose size={4} walking={state === "loading"} />
+            <Goose size={4} walking={false} flapping={state === "loading"} />
             <Text style={text.body}>
               {state === "loading" ? "Fetching the walk…" : state === "missing" ? "Honk? That walk flew away." : "Couldn't load this walk. Check your connection."}
             </Text>
-            <PixelButton label="Plan my own walk" icon="🪿" tone="gold" onPress={() => router.replace("/")} />
+            <PixelButton label="Plan my own walk" tone="gold" onPress={() => router.replace("/")} />
           </Panel>
         </View>
       </SafeAreaView>
@@ -86,7 +86,7 @@ function SharedWalk() {
             <Text style={text.body}>{walk.intro}</Text>
           </Panel>
           <WalkCard walk={walk} onSelectStop={(item, why) => setSelected({ item, note: why })} />
-          <PixelButton label="Plan my own walk" icon="🪿" tone="red" onPress={() => router.replace("/")} />
+          <PixelButton label="Plan my own walk" tone="red" onPress={() => router.replace("/")} />
         </ScrollView>
       </View>
     </SafeAreaView>
