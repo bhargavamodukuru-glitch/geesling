@@ -102,7 +102,7 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
                 onPress={honkAndLocate}
                 style={({ pressed }) => [styles.nearMeButton, pressed && styles.pressed, locating && styles.locating]}
               >
-                <Goose size={2} walking={false} />
+                <Goose size={1} walking={false} />
                 <Text style={styles.nearMeText}>{locating ? "Finding…" : "Near me"}</Text>
               </Pressable>
               <PixelButton label="↻" small onPress={onRefresh} accessibilityLabel="Refresh events" />
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   chipScroll: { flexGrow: 0, flexShrink: 0 },
   toolbar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, paddingHorizontal: 12, paddingVertical: 6 },
   resultCount: { marginLeft: "auto" },
-  nearMeButton: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
+  nearMeButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
   nearMeText: { fontFamily: fonts.body, fontSize: 16, lineHeight: 18, color: colors.ink },
   pressed: { transform: [{ translateX: 2 }, { translateY: 2 }] },
   locating: { opacity: 0.55 },
