@@ -4,7 +4,7 @@ import { Panel, PixelButton, Tag } from "@/components/Pixel";
 import { useSaved } from "@/hooks/useSaved";
 import { placeType, priceLabel, whenLabel } from "@/lib/format";
 import { openDirections } from "@/lib/links";
-import { descriptionWithoutSocialLinks, socialLinksForItem } from "@/lib/socialLinks";
+import { descriptionWithoutLinks, socialLinksForItem } from "@/lib/socialLinks";
 import { CATEGORY_LABELS, colors, fonts, text } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
 
@@ -29,7 +29,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
   const title = item.kind === "event" ? item.title : item.name;
   const link = item.kind === "event" ? (item.ticket_url ?? item.url) : item.website;
   const socialLinks = socialLinksForItem(item);
-  const description = descriptionWithoutSocialLinks(item);
+  const description = descriptionWithoutLinks(item);
 
   return (
     <Panel style={[styles.sheet, maxHeight !== undefined && { maxHeight: Math.max(160, maxHeight) }]} shadow={5}>
@@ -120,7 +120,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
           <Pressable
             key={social.url}
             accessibilityRole="button"
-            accessibilityLabel={`Open ${social.label} profile`}
+            accessibilityLabel={`Open ${social.label}`}
             onPress={() => void Linking.openURL(social.url)}
             style={({ pressed }) => [styles.socialButton, pressed && { transform: [{ translateX: 2 }, { translateY: 2 }] }]}
           >
@@ -129,9 +129,13 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
                 <View style={styles.instagramLens} />
                 <View style={styles.instagramDot} />
               </View>
+            ) : social.platform === "linktree" ? (
+              <Text style={styles.socialMark}>🌳</Text>
+            ) : social.platform === "beacons" ? (
+              <Text style={[styles.socialMark, styles.beaconsMark]}>✦</Text>
             ) : (
               <Text style={[styles.socialMark, social.platform === "facebook" && styles.facebookMark, social.platform === "youtube" && styles.youtubeMark]}>
-                {social.platform === "facebook" ? "f" : social.platform === "tiktok" ? "♪" : social.platform === "youtube" ? "▶" : social.platform === "threads" ? "@" : "𝕏"}
+                {social.platform === "facebook" ? "f" : social.platform === "tiktok" ? "♪" : social.platform === "youtube" ? "▶" : social.platform === "threads" ? "@" : social.platform === "x" ? "𝕏" : "↗"}
               </Text>
             )}
           </Pressable>
@@ -169,4 +173,5 @@ const styles = StyleSheet.create({
   socialMark: { fontFamily: fonts.heading, fontSize: 22, lineHeight: 25, color: colors.ink },
   facebookMark: { color: "#1877F2", fontSize: 27 },
   youtubeMark: { color: "#FF0000", fontSize: 19 },
+  beaconsMark: { color: "#5B5FEF", fontSize: 26 },
 });

@@ -13,11 +13,13 @@ const PLATFORMS: { hosts: string[]; label: string; platform: string }[] = [
   { hosts: ["x.com", "twitter.com"], label: "X", platform: "x" },
   { hosts: ["youtube.com", "youtu.be"], label: "YouTube", platform: "youtube" },
   { hosts: ["threads.net"], label: "Threads", platform: "threads" },
+  { hosts: ["linktr.ee", "linktree.com"], label: "Linktree", platform: "linktree" },
+  { hosts: ["beacons.ai"], label: "Beacons", platform: "beacons" },
 ];
 
-const SOCIAL_URL_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|facebook\.com|fb\.com|tiktok\.com|x\.com|twitter\.com|youtube\.com|youtu\.be|threads\.net)(?:\/[^\s<>"')\]]*)?/gi;
+const URL_PATTERN = /(?:https?:\/\/)?(?:www\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:[a-z]{2,})(?:\/[^\s<>"')\]]*)?/gi;
 
-/** Extract only recognized social links that are explicitly present on the listing. */
+/** Build compact link buttons from URLs explicitly included with the listing. */
 export function socialLinksForItem(item: MapItem): SocialLink[] {
   const sources = item.kind === "event"
     ? [item.url, item.ticket_url, item.description]
@@ -26,7 +28,7 @@ export function socialLinksForItem(item: MapItem): SocialLink[] {
 
   for (const source of sources) {
     if (!source) continue;
-    const candidates: string[] = source.match(SOCIAL_URL_PATTERN) ?? [];
+    const candidates: string[] = source.match(URL_PATTERN) ?? [];
     for (const candidate of candidates) {
       try {
         const normalized = candidate.startsWith("http") ? candidate : `https://${candidate}`;
@@ -34,7 +36,9 @@ export function socialLinksForItem(item: MapItem): SocialLink[] {
         if (parsed.protocol !== "https:" && parsed.protocol !== "http:") continue;
         const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
         const platform = PLATFORMS.find(({ hosts }) => hosts.includes(host));
-        if (platform) urls.add(`${platform.label}\u0000${platform.platform}\u0000${parsed.toString()}`);
+        const label = platform?.label ?? host;
+        const mark = platform?.platform ?? "link";
+        urls.add(`${label}\u0000${mark}\u0000${parsed.toString()}`);
       } catch {
         // Ignore malformed URLs from third-party listing text.
       }
@@ -47,10 +51,10 @@ export function socialLinksForItem(item: MapItem): SocialLink[] {
   });
 }
 
-export function descriptionWithoutSocialLinks(item: MapItem): string | null {
+export function descriptionWithoutLinks(item: MapItem): string | null {
   if (item.kind !== "event" || !item.description) return null;
   const description = item.description
-    .replace(SOCIAL_URL_PATTERN, "")
+    .replace(URL_PATTERN, "")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/ *\n */g, "\n")
     .replace(/\n{3,}/g, "\n\n")
