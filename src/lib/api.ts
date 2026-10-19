@@ -30,6 +30,7 @@ export async function fetchEventsInBounds(bounds: Bounds, filters: EventFilters)
   if (error) throw new Error(error.message);
   const events = ((data ?? []) as EventRow[]).map(toEvent);
   return events.filter((event) =>
+    new Date(event.next_start) < to && new Date(event.next_end) > from &&
     (!filters.paidOnly || !event.is_free) &&
     (!filters.drinksOnly || event.involves_alcohol) &&
     (!filters.rsvpOnly || event.rsvp_required) &&
