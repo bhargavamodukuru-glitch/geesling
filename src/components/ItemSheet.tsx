@@ -24,6 +24,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
   const { isSaved, toggle } = useSaved();
   const saved = isSaved(item.kind, item.id);
   const free = item.is_free;
+  const isPhotoSpot = item.kind === "place" && item.types.includes("photography_spot");
   const title = item.kind === "event" ? item.title : item.name;
   const link = item.kind === "event" ? (item.ticket_url ?? item.url) : (item.website ?? item.maps_url);
 
@@ -35,6 +36,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
             <Tag label={priceLabel(item)} color={free ? colors.free : colors.paid} />
             {item.kind === "event" && item.is_live ? <Tag label="LIVE NOW" color={colors.live} /> : null}
             {item.involves_alcohol ? <Tag label="🍻 Drinks" color={colors.gold} textColor={colors.ink} /> : null}
+            {isPhotoSpot ? <Tag label="📸 Photo spot" color={colors.photoPin} /> : null}
             {item.kind === "event" && item.age_min ? <Tag label={`${item.age_min}+`} color={colors.ink} /> : null}
           </View>
           <Text style={text.h2} numberOfLines={3}>
@@ -92,7 +94,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
             {item.address ? <Text style={text.small}>📍 {item.address}</Text> : null}
             {item.summary ? <Text style={text.small}>{item.summary}</Text> : null}
             {item.hours ? <Text style={text.small}>{item.hours.join("\n")}</Text> : null}
-            <Text style={styles.source}>Place info from Google</Text>
+            <Text style={styles.source}>{isPhotoSpot ? "Curated scenic viewpoint · Check map for current access" : "Place info from Google"}</Text>
           </>
         )}
       </ScrollView>
@@ -102,7 +104,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
         <PixelButton label="TTC" icon="🚋" small onPress={() => openDirections(item, true)} />
         {link ? (
           <PixelButton
-            label={item.kind === "event" && item.rsvp_required ? "RSVP / Tickets" : "Website"}
+            label={item.kind === "event" && item.rsvp_required ? "RSVP / Tickets" : isPhotoSpot && !item.website ? "Open in Maps" : "Website"}
             tone={item.kind === "event" && item.rsvp_required ? "red" : "paper"}
             small
             onPress={() => void Linking.openURL(link)}

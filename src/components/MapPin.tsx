@@ -25,7 +25,8 @@ function placeEmoji(types: string[]): string {
 
 function PinView({ item, order, selected }: Props) {
   const free = item.is_free;
-  const bg = free ? colors.free : colors.paid;
+  const isPhotoSpot = item.kind === "place" && item.types.includes("photography_spot");
+  const bg = isPhotoSpot ? colors.photoPin : free ? colors.free : colors.paid;
   const border = selected ? colors.gold : colors.ink;
   const icon = order !== undefined ? String(order) : item.kind === "event" ? (CATEGORY_LABELS[item.categories[0]]?.emoji ?? "⭐") : placeEmoji(item.types);
   const label = item.kind === "event" ? pinLabel(item) : null;

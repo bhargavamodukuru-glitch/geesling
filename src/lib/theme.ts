@@ -12,6 +12,7 @@ export const colors = {
   freeDark: "#3D7A26",
   paid: "#8E5CC4",
   paidDark: "#5E3A8C",
+  photoPin: "#263746",
   accent: "#C8412F",
   gold: "#F2C14E",
   sky: "#8FD3F4",
