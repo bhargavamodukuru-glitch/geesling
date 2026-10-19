@@ -30,7 +30,7 @@ function Home() {
   const { saved } = useSaved();
 
   const [tab, setTab] = useState<Tab>("happening");
-  const [filters, setFilters] = useState<EventFilters>({ window: "week", freeOnly: false, categories: [] });
+  const [filters, setFilters] = useState<EventFilters>({ window: "week", date: null, freeOnly: false, categories: [] });
   const [bounds, setBounds] = useState<Bounds | null>(null);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);

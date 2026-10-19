@@ -105,6 +105,8 @@ export type TimeWindow = "now" | "today" | "weekend" | "week" | "month";
 
 export interface EventFilters {
   window: TimeWindow;
+  /** Selected Toronto calendar date (YYYY-MM-DD), or null to use the time window. */
+  date: string | null;
   freeOnly: boolean;
   categories: string[];
 }

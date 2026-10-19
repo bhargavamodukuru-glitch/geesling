@@ -21,6 +21,30 @@ export function torontoDay(at: Date): string {
   return dayKey.format(at);
 }
 
+/** UTC instants spanning one Toronto calendar day, including DST transitions. */
+export function torontoDateRange(key: string): { from: Date; to: Date } {
+  const [year, month, day] = key.split("-").map(Number);
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  const nextKey = `${nextDay.getUTCFullYear()}-${String(nextDay.getUTCMonth() + 1).padStart(2, "0")}-${String(nextDay.getUTCDate()).padStart(2, "0")}`;
+  return { from: torontoMidnight(key), to: torontoMidnight(nextKey) };
+}
+
+function torontoMidnight(key: string): Date {
+  const [year, month, day] = key.split("-").map(Number);
+  const target = Date.UTC(year, month - 1, day);
+  let instant = target;
+  const partsFormat = new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  });
+  // Reconcile the desired wall-clock midnight against Toronto's offset.
+  for (let i = 0; i < 2; i++) {
+    const parts = Object.fromEntries(partsFormat.formatToParts(new Date(instant)).map((part) => [part.type, part.value]));
+    const represented = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second));
+    instant += target - represented;
+  }
+  return new Date(instant);
+}
+
 /** Label shown on the pin: LIVE while happening, "Tonight 8pm" today, otherwise the confirmed date. */
 export function pinLabel(event: EventItem, now = new Date()): string {
   if (event.is_live) return "LIVE";

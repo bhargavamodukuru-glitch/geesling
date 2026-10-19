@@ -1,5 +1,5 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
-import { windowRange } from "./format";
+import { torontoDateRange, windowRange } from "./format";
 import { ensureSession, supabase } from "./supabase";
 import type { Bounds, ChatMessage, EventFilters, EventItem, MapItem, SavedItem, Walk } from "./types";
 
@@ -15,7 +15,7 @@ function toEvent(row: EventRow): EventItem {
 }
 
 export async function fetchEventsInBounds(bounds: Bounds, filters: EventFilters): Promise<EventItem[]> {
-  const { from, to } = windowRange(filters.window);
+  const { from, to } = filters.date ? torontoDateRange(filters.date) : windowRange(filters.window);
   const { data, error } = await supabase.rpc("events_in_bounds", {
     min_lat: bounds.minLat,
     min_lng: bounds.minLng,
