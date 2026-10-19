@@ -107,7 +107,7 @@ export function distance(meters: number): string {
   return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters / 10) * 10} m`;
 }
 
-/** [from, to] for each time-window chip. Weekend = Fri 5pm → Sun midnight (Toronto). */
+/** [from, to] for each time-window chip. Weekend is Saturday and Sunday in Toronto. */
 export function windowRange(window: TimeWindow, now = new Date()): { from: Date; to: Date } {
   const endOfTorontoDay = (d: Date) => {
     const parts = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "numeric", hourCycle: "h23" }).formatToParts(d);
@@ -123,17 +123,21 @@ export function windowRange(window: TimeWindow, now = new Date()): { from: Date;
     case "weekend": {
       const weekday = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" }).format(now);
       const index = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekday);
-      const daysToFriday = index === 0 ? -2 : 5 - index; // Sunday counts as the current weekend
-      const friday = new Date(now.getTime() + daysToFriday * 86_400_000);
-      const sunday = new Date(friday.getTime() + 2 * 86_400_000);
-      const fridayEvening = new Date(endOfTorontoDay(friday).getTime() - 7 * 3_600_000);
-      return { from: fridayEvening > now ? fridayEvening : now, to: endOfTorontoDay(sunday) };
+      const [year, month, day] = torontoDay(now).split("-").map(Number);
+      const daysToSaturday = index === 0 ? -1 : (6 - index + 7) % 7;
+      const saturday = new Date(Date.UTC(year, month - 1, day + daysToSaturday));
+      const sunday = new Date(Date.UTC(saturday.getUTCFullYear(), saturday.getUTCMonth(), saturday.getUTCDate() + 1));
+      const saturdayKey = calendarKey(saturday);
+      const sundayKey = calendarKey(sunday);
+      return { from: torontoDateRange(saturdayKey).from, to: torontoDateRange(sundayKey).to };
     }
     case "week":
       return { from: now, to: new Date(now.getTime() + 7 * 86_400_000) };
-    case "month":
-      return { from: now, to: new Date(now.getTime() + 30 * 86_400_000) };
   }
+}
+
+function calendarKey(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 export const WINDOW_LABELS: Record<TimeWindow, string> = {
@@ -141,5 +145,4 @@ export const WINDOW_LABELS: Record<TimeWindow, string> = {
   today: "Today",
   weekend: "Weekend",
   week: "This week",
-  month: "Next 30 days",
 };

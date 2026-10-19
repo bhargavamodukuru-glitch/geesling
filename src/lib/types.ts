@@ -101,7 +101,7 @@ export interface Bounds {
   maxLng: number;
 }
 
-export type TimeWindow = "now" | "today" | "weekend" | "week" | "month";
+export type TimeWindow = "now" | "today" | "weekend" | "week";
 
 export interface EventFilters {
   window: TimeWindow;
