@@ -4,7 +4,7 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SavedProvider } from "@/hooks/useSaved";
 import { ensureSession, isConfigured } from "@/lib/supabase";
@@ -17,7 +17,9 @@ export default function RootLayout() {
     if (isConfigured) ensureSession().catch((e) => console.warn("Anonymous sign-in failed:", (e as Error).message));
   }, []);
 
-  if (!fontsLoaded) {
+  // Web can render with system fallbacks while its custom fonts download; avoid
+  // blocking the first usable screen on a phone's initial visit.
+  if (Platform.OS !== "web" && !fontsLoaded) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.parchment }}>
         <ActivityIndicator color={colors.wood} />
