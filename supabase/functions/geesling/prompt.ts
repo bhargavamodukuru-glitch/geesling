@@ -115,6 +115,7 @@ export function contextBlock(args: {
   endIso: string;
   timeBudgetMinutes: number | null;
   freeOnly: boolean;
+  travel?: "walk" | "transit" | "flexible";
   requestedDateRange?: string | null;
 }): string {
   return [
@@ -126,6 +127,8 @@ export function contextBlock(args: {
       ? `The person is at lat ${args.origin.lat.toFixed(5)}, lng ${args.origin.lng.toFixed(5)}. Start the walk near them.`
       : `Location unknown; start downtown (lat ${args.origin.lat}, lng ${args.origin.lng}) or wherever best fits the request.`,
     args.freeOnly ? "They switched on the FREE-ONLY filter: every stop must be free." : "",
+    args.travel === "walk" ? "They are travelling on foot only: never route by transit, and keep every stop within walking distance of the previous one." : "",
+    args.travel === "transit" ? "They will use the TTC: hops of a few kilometres are fine as long as each one is easy by transit." : "",
   ]
     .filter(Boolean)
     .join("\n");

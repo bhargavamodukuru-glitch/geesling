@@ -116,11 +116,14 @@ async function computeRoute(apiKey: string, from: LatLng, to: LatLng, mode: "WAL
   };
 }
 
-/** Best way between two stops: walk, or TTC when the hop is long and transit is meaningfully faster. */
-export async function bestLeg(apiKey: string | null, from: LatLng, to: LatLng, departAt: Date): Promise<Leg> {
+/**
+ * Best way between two stops: walk, or TTC when the hop is long and transit is meaningfully faster.
+ * `allowTransit: false` is the "I'm walking" choice: the leg is always a walk, however long it is.
+ */
+export async function bestLeg(apiKey: string | null, from: LatLng, to: LatLng, departAt: Date, allowTransit = true): Promise<Leg> {
   if (!apiKey) return estimateLeg(from, to);
   const walk = (await computeRoute(apiKey, from, to, "WALK", departAt)) ?? estimateLeg(from, to);
-  if (walk.distance_m <= TRANSIT_THRESHOLD_M) return walk;
+  if (!allowTransit || walk.distance_m <= TRANSIT_THRESHOLD_M) return walk;
   const transit = await computeRoute(apiKey, from, to, "TRANSIT", departAt);
   if (transit && transit.transit_lines.length > 0 && transit.duration_s < walk.duration_s * 0.8) return transit;
   return walk;

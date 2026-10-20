@@ -67,6 +67,7 @@ interface GuideRequest {
   timeBudgetMinutes?: number | null;
   startAt?: string | null;
   freeOnly?: boolean;
+  travel?: "walk" | "transit" | "flexible";
 }
 
 interface RequestedDateRange {
@@ -285,13 +286,14 @@ async function buildStops(
   origin: { lat: number; lng: number } | null,
   start: Date,
   routesKey: string | null,
+  allowTransit: boolean,
 ): Promise<WalkStop[]> {
   const stops: WalkStop[] = [];
   let cursor = start;
   let previous: { lat: number; lng: number } | null = origin;
   for (const [index, stop] of chosen.entries()) {
     const item = known.get(stop.id)!;
-    const leg = previous ? await bestLeg(routesKey, previous, item, cursor) : null;
+    const leg = previous ? await bestLeg(routesKey, previous, item, cursor, allowTransit) : null;
     let arrive = new Date(cursor.getTime() + (leg?.duration_s ?? 0) * 1000);
     let stay = Math.max(10, Math.min(stop.stay_minutes, 240));
     if (item.kind === "event") {
@@ -364,6 +366,8 @@ Deno.serve(async (req) => {
   const origin = isLatLng(body.origin) ? body.origin : null;
   const searchOrigin = origin ?? DOWNTOWN;
   const freeOnly = body.freeOnly === true;
+  const travel = body.travel === "walk" || body.travel === "transit" ? body.travel : "flexible";
+  const allowTransit = travel !== "walk";
 
   const history: Anthropic.Beta.BetaMessageParam[] = (body.history ?? [])
     .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.text === "string" && m.text.trim())
@@ -385,6 +389,7 @@ Deno.serve(async (req) => {
         endIso: end.toISOString(),
         timeBudgetMinutes: budget,
         freeOnly,
+        travel,
         requestedDateRange: targetDates?.label ?? null,
       })}\n\nRequest: ${prompt}`,
     },
@@ -472,7 +477,7 @@ Deno.serve(async (req) => {
                   is_error: true,
                 };
               }
-              const candidateStops = await buildStops(walk.stops.slice(0, 8), known, origin, start, placesKey);
+              const candidateStops = await buildStops(walk.stops.slice(0, 8), known, origin, start, placesKey, allowTransit);
               const longHops = candidateStops.slice(1).filter((stop) => stop.leg && stop.leg.duration_s > MAX_INTERSTOP_TRAVEL_SECONDS);
               if (longHops.length) {
                 const details = longHops.map((stop) => `${stop.item.kind === "event" ? stop.item.title : stop.item.name} (${Math.ceil((stop.leg!.duration_s) / 60)} min from the previous stop)`).join("; ");
@@ -512,7 +517,7 @@ Deno.serve(async (req) => {
   }
 
   const chosen = (presented as PresentWalkInput).stops.slice(0, 8);
-  const stops = validatedStops ?? await buildStops(chosen, known, origin, start, placesKey);
+  const stops = validatedStops ?? await buildStops(chosen, known, origin, start, placesKey, allowTransit);
   // Google review content is transient evidence for ranking; keep only the
   // permanent place ID and derived recommendation in the stored walk.
   const safeStops = stops.map((stop) => {

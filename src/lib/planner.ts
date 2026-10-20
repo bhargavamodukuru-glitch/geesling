@@ -31,6 +31,8 @@ export interface PlanRequest {
   timeBudgetMinutes?: number | null;
   freeOnly?: boolean;
   origin?: LatLng | null;
+  /** "walk" makes the server route every leg on foot (no TTC). */
+  travel?: TravelChoice;
 }
 
 interface Option<T extends string> {
@@ -134,5 +136,6 @@ export function buildPlanRequest(prefs: PlanPreferences, userLocation: LatLng | 
     timeBudgetMinutes: time.minutes,
     freeOnly: prefs.budget === "free",
     origin,
+    travel: prefs.travel,
   };
 }

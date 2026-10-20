@@ -54,6 +54,12 @@ test("walking forbids transit; TTC allows longer hops; either adds nothing", () 
   assert.doesNotMatch(either, /on foot|TTC/);
 });
 
+test("the travel choice is passed through so the server can enforce it", () => {
+  assert.equal(buildPlanRequest(prefs({ travel: "walk" }), null).travel, "walk");
+  assert.equal(buildPlanRequest(prefs({ travel: "transit" }), null).travel, "transit");
+  assert.equal(buildPlanRequest(prefs({ travel: "flexible" }), null).travel, "flexible");
+});
+
 test("the chat label lists only the choices the person actually made", () => {
   const req = buildPlanRequest(prefs({ vibe: "date", time: "short", budget: "u25", area: "yorkville", travel: "walk" }), null);
   assert.equal(req.display, "Date · 1–2 hours · Under $25 · Yorkville & Annex · Walking");

@@ -1,6 +1,7 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { torontoDateRange, windowRange } from "./format";
 import { ensureSession, supabase } from "./supabase";
+import type { TravelChoice } from "./planner";
 import type { Bounds, ChatMessage, EventFilters, EventItem, MapItem, SavedItem, Walk } from "./types";
 
 type EventRow = Omit<EventItem, "kind">;
@@ -45,6 +46,7 @@ export interface GuideInput {
   timeBudgetMinutes: number | null;
   startAt: string | null;
   freeOnly: boolean;
+  travel?: TravelChoice;
 }
 
 export interface GuideReply {
@@ -62,6 +64,7 @@ export async function askGeesling(input: GuideInput): Promise<GuideReply> {
       timeBudgetMinutes: input.timeBudgetMinutes,
       startAt: input.startAt,
       freeOnly: input.freeOnly,
+      travel: input.travel,
     },
   });
   if (error) {
