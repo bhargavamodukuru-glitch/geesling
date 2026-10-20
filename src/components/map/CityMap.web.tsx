@@ -9,7 +9,11 @@ import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
 import { colors, text } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
+import { TORONTO_BOUNDS } from "@/lib/area";
 import { TORONTO, walkFocusBounds, type CityMapProps } from "./types";
+
+// Geesling covers Toronto only: the camera cannot leave this box.
+const TORONTO_RESTRICTION = { latLngBounds: { ...TORONTO_BOUNDS }, strictBounds: true };
 
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 // Advanced markers need a Map ID. Create one with the Stardew style from mapStyle.ts in Google Cloud.
@@ -68,6 +72,8 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
         defaultCenter={userLocation ?? TORONTO}
         defaultZoom={13}
         gestureHandling="greedy"
+        restriction={TORONTO_RESTRICTION}
+        minZoom={10}
         disableDefaultUI
         zoomControl
         clickableIcons={false}

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isInEventArea } from "../src/lib/area.ts";
 import { isTopRated } from "../src/lib/placeBadges.ts";
 import type { EventItem, PlaceItem } from "../src/lib/types.ts";
 
@@ -29,12 +28,4 @@ test("a place without a rating, and any event, never gets the star", () => {
   assert.equal(isTopRated(place({ rating: null, rating_count: null })), false);
   const event = { kind: "event", rating: 5, rating_count: 999 } as unknown as EventItem;
   assert.equal(isTopRated(event), false);
-});
-
-test("the event area covers Toronto and the nearby cities, and nothing far away", () => {
-  assert.equal(isInEventArea(43.6532, -79.3832), true, "downtown Toronto");
-  assert.equal(isInEventArea(43.5890, -79.6441), true, "Mississauga");
-  assert.equal(isInEventArea(45.4215, -75.6972), false, "Ottawa");
-  assert.equal(isInEventArea(40.7128, -74.006), false, "New York");
-  assert.equal(isInEventArea(0, 0), false, "no location");
 });

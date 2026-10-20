@@ -139,6 +139,8 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
       <FlatList
         ref={listRef}
         data={messages}
+        // Rows read `busy` and the retry count, so tell the list to re-render when they change.
+        extraData={`${busy}-${retriesLeft}-${lastWalkId}`}
         keyExtractor={(m) => m.id}
         contentContainerStyle={{ gap: 10, padding: 12 }}
         ListHeaderComponent={messages.length === 0 ? (

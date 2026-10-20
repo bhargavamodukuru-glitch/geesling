@@ -17,11 +17,9 @@ interface Props {
   onFilters: (filters: EventFilters) => void;
   onSelect: (event: EventItem) => void;
   onRefresh: () => void;
-  /** The map is centered somewhere Geesling has no event listings (it lists the Toronto area). */
-  outsideEventArea?: boolean;
 }
 
-export function HappeningPanel({ events, loading, error, filters, onFilters, onSelect, onRefresh, outsideEventArea = false }: Props) {
+export function HappeningPanel({ events, loading, error, filters, onFilters, onSelect, onRefresh }: Props) {
   const [welcomeVisible, setWelcomeVisible] = useState<boolean | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -167,11 +165,7 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
         ListEmptyComponent={
           <View style={styles.empty}>
             <Goose size={4} />
-            <Text style={text.body}>{loading
-                ? "Goose is scouting the city…"
-                : outsideEventArea
-                  ? "No events listed here: Geesling lists events for the Toronto area. Ask Geesling for places nearby instead."
-                  : "Nothing here yet — try another time, zoom out, or ask Geesling."}</Text>
+            <Text style={text.body}>{loading ? "Goose is scouting the city…" : "Nothing here yet — try another time, zoom out, or ask Geesling."}</Text>
           </View>
         }
         renderItem={({ item }) => (

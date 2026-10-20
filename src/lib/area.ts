@@ -1,6 +1,24 @@
-// Where Geesling has event listings. Pure and import-free so it can be unit-tested under plain Node.
+// Geesling covers Toronto only. Pure and import-free so it can be unit-tested under plain Node.
 
-/** Rough box around the Toronto area; the same box the event ingest uses (ingest/lib/classify.ts isInToronto). */
-export function isInEventArea(lat: number, lng: number): boolean {
-  return lat > 43.4 && lat < 44.0 && lng > -79.9 && lng < -79.0;
+/**
+ * A box around the City of Toronto with a small margin (Steeles Ave to the lake, Etobicoke to the Rouge).
+ * It is a rectangle, so it also takes in slivers of neighbouring cities at the edges.
+ */
+export const TORONTO_BOUNDS = { south: 43.55, north: 43.9, west: -79.67, east: -79.09 };
+
+export const TORONTO_SPAN = {
+  lat: TORONTO_BOUNDS.north - TORONTO_BOUNDS.south,
+  lng: TORONTO_BOUNDS.east - TORONTO_BOUNDS.west,
+};
+
+export function isInToronto(lat: number, lng: number): boolean {
+  return lat >= TORONTO_BOUNDS.south && lat <= TORONTO_BOUNDS.north && lng >= TORONTO_BOUNDS.west && lng <= TORONTO_BOUNDS.east;
+}
+
+/** The nearest point inside Toronto; a point already inside comes back unchanged. */
+export function clampToToronto(lat: number, lng: number): { lat: number; lng: number } {
+  return {
+    lat: Math.min(TORONTO_BOUNDS.north, Math.max(TORONTO_BOUNDS.south, lat)),
+    lng: Math.min(TORONTO_BOUNDS.east, Math.max(TORONTO_BOUNDS.west, lng)),
+  };
 }

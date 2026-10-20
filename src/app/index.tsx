@@ -14,7 +14,7 @@ import { SetupNotice } from "@/components/SetupNotice";
 import { useLocation } from "@/hooks/useLocation";
 import { useSaved } from "@/hooks/useSaved";
 import { fetchEventsInBounds } from "@/lib/api";
-import { isInEventArea } from "@/lib/area";
+import { isInToronto } from "@/lib/area";
 import type { PlanRequest } from "@/lib/planner";
 import { isConfigured } from "@/lib/supabase";
 import { colors, fonts } from "@/lib/theme";
@@ -30,7 +30,21 @@ export default function HomeScreen() {
 function Home() {
   const { width } = useWindowDimensions();
   const wide = width >= 900;
-  const { location, status: locationStatus, locate } = useLocation();
+  const { location: deviceLocation, status: locationStatus, locate: locateDevice } = useLocation();
+  // Geesling covers Toronto only: a location elsewhere is not used to center the map or to start walks.
+  const location = useMemo(() => (deviceLocation && isInToronto(deviceLocation.lat, deviceLocation.lng) ? deviceLocation : null), [deviceLocation]);
+  const outsideToronto = deviceLocation !== null && location === null;
+  const locate = useCallback(async () => {
+    const found = await locateDevice();
+    return found && isInToronto(found.lat, found.lng) ? found : null;
+  }, [locateDevice]);
+  const locationNote = outsideToronto
+    ? { text: "You’re outside Toronto, so this map shows downtown Toronto.", retry: false }
+    : locationStatus === "denied"
+      ? { text: "Location is off, so this is downtown Toronto. Allow location to start from your own spot.", retry: true }
+      : locationStatus === "error"
+        ? { text: "Couldn’t find your location, so this is downtown Toronto.", retry: true }
+        : null;
   const { saved } = useSaved();
 
   const [entered, setEntered] = useState(false);
@@ -174,12 +188,10 @@ function Home() {
           <PixelButton label="Clear walk" small onPress={clearWalk} />
         </View>
       ) : null}
-      {!walk && entered && !locationNoteHidden && (locationStatus === "denied" || locationStatus === "error") ? (
+      {!walk && entered && !locationNoteHidden && locationNote ? (
         <View style={styles.walkBanner}>
-          <Text style={styles.noteText}>
-            {locationStatus === "denied" ? "Location is off, so this is Toronto. Allow location to see your own area." : "Couldn’t find your location, so this is Toronto."}
-          </Text>
-          <PixelButton label="Try again" small onPress={() => void locate()} />
+          <Text style={styles.noteText}>{locationNote.text}</Text>
+          {locationNote.retry ? <PixelButton label="Try again" small onPress={() => void locate()} /> : null}
           <PixelButton label="✕" small onPress={() => setLocationNoteHidden(true)} accessibilityLabel="Dismiss location message" />
         </View>
       ) : null}
@@ -225,7 +237,6 @@ function Home() {
             onFilters={setFilters}
             onSelect={(e) => selectItem(e)}
             onRefresh={() => setReloadKey((k) => k + 1)}
-            outsideEventArea={bounds ? !isInEventArea((bounds.minLat + bounds.maxLat) / 2, (bounds.minLng + bounds.maxLng) / 2) : false}
           />
         ) : null}
         {tab === "saved" ? <SavedPanel onSelect={(i) => selectItem(i)} onShowWalk={showWalk} /> : null}

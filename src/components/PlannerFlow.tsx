@@ -72,7 +72,7 @@ export function PlannerFlow({ initialVibe, initialPrefs, userLocation, onLocate,
       setNearCoords(found);
       set("area", "near");
     } else {
-      setLocationNote("Location is off, so pick a starting area below instead.");
+      setLocationNote("Couldn’t place you in Toronto, so pick a starting area below instead.");
     }
   };
 

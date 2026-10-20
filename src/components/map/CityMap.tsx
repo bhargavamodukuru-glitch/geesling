@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from "react-native-maps";
 import { MapPin } from "@/components/MapPin";
+import { TORONTO_SPAN, clampToToronto } from "@/lib/area";
 import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
 import { colors } from "@/lib/theme";
@@ -49,6 +50,36 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
     }
   }, [focusKey, walk, userLocation]);
 
+  // Geesling covers Toronto only. Apple Maps can't be bounded natively, so after a gesture ends the camera is
+  // pulled back inside Toronto (and kept from zooming out past the city) on both Apple and Google maps.
+  const clampingRef = useRef(false);
+  const handleRegionChange = (region: Region) => {
+    // The region reported right after our own correction is accepted as is, so an unusual screen shape
+    // (where the corrected region still looks "too wide") can never make the camera correct itself forever.
+    if (clampingRef.current) {
+      clampingRef.current = false;
+      onBoundsChange(regionToBounds(region));
+      return;
+    }
+    const center = clampToToronto(region.latitude, region.longitude);
+    const drifted = Math.abs(center.lat - region.latitude) > 1e-6 || Math.abs(center.lng - region.longitude) > 1e-6;
+    const tooWide = region.latitudeDelta > TORONTO_SPAN.lat * 1.2 || region.longitudeDelta > TORONTO_SPAN.lng * 1.2;
+    if (drifted || tooWide) {
+      clampingRef.current = true;
+      mapRef.current?.animateToRegion(
+        {
+          latitude: center.lat,
+          longitude: center.lng,
+          latitudeDelta: Math.min(region.latitudeDelta, TORONTO_SPAN.lat),
+          longitudeDelta: Math.min(region.longitudeDelta, TORONTO_SPAN.lng),
+        },
+        300,
+      );
+      return;
+    }
+    onBoundsChange(regionToBounds(region));
+  };
+
   const walkIds = useMemo(() => new Map(walk?.stops.map((s) => [s.item.id, s.order]) ?? []), [walk]);
   const pins: MapItem[] = useMemo(() => {
     const stopItems = walk?.stops.map((s) => s.item) ?? [];
@@ -83,7 +114,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
       showsPointsOfInterests={false}
       showsCompass={false}
       toolbarEnabled={false}
-      onRegionChangeComplete={(region) => onBoundsChange(regionToBounds(region))}
+      onRegionChangeComplete={handleRegionChange}
       onPress={(e) => {
         if (e.nativeEvent.action !== "marker-press") onSelect(null);
       }}
