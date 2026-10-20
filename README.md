@@ -125,7 +125,8 @@ npx eas-cli@latest build --platform all
 | Command | What it does |
 |---|---|
 | `npm start` | Expo dev server |
-| `npm run typecheck` | Type-checks the app and the ingest code |
+| `npm run typecheck` | Type-checks the app, the ingest code and the tests |
+| `npm test` | Unit tests for the guided-planner logic |
 | `npx expo lint` | Lint |
 | `npm run ingest:dry` | Ingest preview (no writes) |
 | `npm run ingest` | Ingest into Supabase |

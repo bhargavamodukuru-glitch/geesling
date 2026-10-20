@@ -1,5 +1,39 @@
 # Geesling — session handoff prompt
 
+> **Read the "Current state (2026-10-20)" block first.** Everything under the line after it was written on 2026-10-18 and is partly out of date (model, scope, Toronto-only wording). Where they disagree, trust the current-state block and the code.
+
+## Current state (2026-10-20)
+
+**Branches**
+- `main` is the shipped line. It has 40+ commits (welcome scene, event filters, photo-spot pins, social links, Haiku 5.5 guide, usage report) plus the guided planner below.
+- `wip/hidden-eggs-gta` holds parked, unfinished work and is **local only (never pushed)**: Hidden Eggs (community picks), GTA-wide ingest (`isInGTA`, Ticketmaster 60 km), guide `timeZone` and regional search, `eas.json`, `expo run:*` scripts, `MOBILE_TESTING_HANDOFF.md`, README edits. Its two migrations (`20261020000000_hidden_gems.sql`, `...0001_hidden_egg_submissions.sql`) are **not applied** to the live database and `supabase/functions/hidden-egg-places` is **not deployed**. Do not deploy from that branch without applying the migrations first.
+
+**Guided planner (the 2026-10-20 change, on `main`)**
+- Home (`src/components/GeeslingWelcome.tsx`): **Make a plan** button, five shortcuts (Date, Friends, Solo, Try something new, Surprise me), "or just tell me what you're after" (the old free-text box), "Skip to live map".
+- `src/components/PlannerFlow.tsx`: 3 steps (vibe, time + budget, start + travel) with defaults pre-selected and "Skip the rest and use the highlighted choices". A shortcut skips step 1. Location permission is requested only when "Near me" is tapped; otherwise the person picks a starting area.
+- `src/lib/planner.ts`: pure, import-free logic. `buildPlanRequest(prefs, userLocation)` turns the choices into `{ prompt, display, timeBudgetMinutes, freeOnly, origin }`. Budget wording is "total for the whole group". `display` is the short label shown in the chat bubble; `prompt` is what the guide receives.
+- Wiring: `src/app/index.tsx` (`startPrompt(request)`) → `GeeslingPanel` (`initialRequest`; undefined fields fall back to the panel's own state, so free text behaves as before). No backend change, no new routes.
+- Tests: `npm test` runs `tests/planner.test.ts` (9 tests, `node:test`, no new dependency).
+
+**Checks (all pass on `main`)**: `npm run typecheck` (app, ingest, tests), `npx expo lint`, `npm test`. `npx expo-doctor` has 1 advisory failure: 4 patch versions behind (expo, expo-font, expo-location, expo-router); not upgraded.
+
+**Verified**: the flow in a browser at phone width; one real request (Date · 1–2 hours · Under $25 · Yorkville · Walking) reached the live guide with the right budget, start coordinates and prompt. **Not verified**: "Near me" permission grant and denial, any iOS or Android device, `eas build`.
+
+**Known gaps (found while testing; not fixed)**
+1. **Walking is not enforced.** The planner's "Walking" choice only goes into the prompt text; the guide server still picks TTC for legs over ~1.8 km when it is faster (`supabase/functions/geesling/routes.ts` `bestLeg`). The test walk had a 19-minute TTC leg. Fix: send a `travel` field and skip TRANSIT when it is "walk". Needs a function deploy.
+2. **Time and budget are prompt-only.** The test walk planned 122 minutes against a 120-minute window. Nothing validates total cost, opening hours at arrival, or time fit in code. Plan: deterministic hard filters + a transparent score, returning up to 3 plans.
+3. **Driving is not offered** because routing supports walking and TTC only.
+4. Only one plan is returned; no "try another" or "adjust" yet; no total-cost summary on the plan.
+5. Data: about 1,450 live events (Ticketmaster ~1,060, City of Toronto ~380, Eventbrite 0: `EVENTBRITE_TOKEN` not set as a GitHub secret). Every Ticketmaster event is flagged "RSVP/tickets required" and ~76% have no price. There is no client analytics beyond `guide_usage` and `walks`.
+
+**Production**: `https://geesling.expo.app` serves commit `40175f0` (before the planner). Supabase functions `geesling` (v43) and `usage-report` (v31) were deployed from older code. Deploy web with `npm run deploy:web` (builds from the working tree, so keep it clean first).
+
+**Env var names only** — app: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`, `EXPO_PUBLIC_GOOGLE_MAPS_MAP_ID`, `EXPO_PUBLIC_SITE_URL`, `GOOGLE_MAPS_ANDROID_API_KEY`, `GOOGLE_MAPS_IOS_API_KEY`. Ingest/CI: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TICKETMASTER_API_KEY`, `EVENTBRITE_TOKEN`. Edge-function secrets: `ANTHROPIC_API_KEY`, `GOOGLE_MAPS_SERVER_KEY`, `USAGE_REPORT_TOKEN`. `.env` and `supabase/functions/.env` are git-ignored.
+
+**Recommended next task**: send a `travel` preference to the guide and enforce "walk" in `bestLeg` (small, fixes gap 1), then results with a plan summary and "Try another", then the deterministic filter/score core.
+
+---
+
 Paste everything below the line into a new Claude (or other AI) session to continue.
 
 ---

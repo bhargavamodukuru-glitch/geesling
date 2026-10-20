@@ -90,6 +90,8 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+  /** Shorter text shown in the bubble when `text` is a long prompt composed by the guided planner. */
+  display?: string;
   walk?: Walk | null;
   error?: boolean;
   musicCrawlerLink?: boolean;

@@ -6,6 +6,7 @@ import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { WalkCard } from "@/components/WalkCard";
 import { askGeesling } from "@/lib/api";
+import type { PlanRequest } from "@/lib/planner";
 import { colors, fonts, text } from "@/lib/theme";
 import type { ChatMessage, MapItem, Walk } from "@/lib/types";
 
@@ -32,7 +33,7 @@ const BUDGETS: { label: string; minutes: number | null }[] = [
 interface Props {
   origin: { lat: number; lng: number } | null;
   freeOnly: boolean;
-  initialPrompt: string | null;
+  initialRequest: PlanRequest | null;
   onPromptConsumed: () => void;
   onInitialPromptComplete: () => void;
   onWalk: (walk: Walk) => void;
@@ -42,25 +43,33 @@ interface Props {
 let counter = 0;
 const nextId = () => `m${Date.now()}-${counter++}`;
 
-export function GeeslingPanel({ origin, freeOnly, initialPrompt, onPromptConsumed, onInitialPromptComplete, onWalk, onSelectStop }: Props) {
+export function GeeslingPanel({ origin, freeOnly, initialRequest, onPromptConsumed, onInitialPromptComplete, onWalk, onSelectStop }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [budget, setBudget] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
-  const lastInitialPrompt = useRef<string | null>(null);
+  const lastInitialRequest = useRef<PlanRequest | null>(null);
 
-  const send = useCallback(async (prompt: string, initial = false) => {
+  // `request` carries the guided planner's choices; fields it leaves undefined fall back to this panel's own state.
+  const send = useCallback(async (prompt: string, initial = false, request?: PlanRequest) => {
     const trimmed = prompt.trim();
     if (!trimmed || busy) return;
-    const userMessage: ChatMessage = { id: nextId(), role: "user", text: trimmed };
+    const userMessage: ChatMessage = { id: nextId(), role: "user", text: trimmed, display: request?.display };
     const musicCrawlerLink = /\b(music|concerts?|gigs?|bands?|live performances?|live shows?)\b/i.test(trimmed);
     const history = messages;
     setMessages((m) => [...m, userMessage]);
     setDraft("");
     setBusy(true);
     try {
-      const reply = await askGeesling({ prompt: trimmed, history, origin, timeBudgetMinutes: budget, startAt: null, freeOnly });
+      const reply = await askGeesling({
+        prompt: trimmed,
+        history,
+        origin: request?.origin !== undefined ? request.origin : origin,
+        timeBudgetMinutes: request?.timeBudgetMinutes !== undefined ? request.timeBudgetMinutes : budget,
+        startAt: null,
+        freeOnly: request?.freeOnly ?? freeOnly,
+      });
       setMessages((m) => [...m, { id: nextId(), role: "assistant", text: reply.message, walk: reply.walk, musicCrawlerLink }]);
       if (reply.walk) onWalk(reply.walk);
     } catch (e) {
@@ -73,15 +82,16 @@ export function GeeslingPanel({ origin, freeOnly, initialPrompt, onPromptConsume
   }, [busy, messages, origin, budget, freeOnly, onWalk, onInitialPromptComplete]);
 
   useEffect(() => {
-    if (!initialPrompt) {
-      lastInitialPrompt.current = null;
+    if (!initialRequest) {
+      lastInitialRequest.current = null;
       return;
     }
-    if (lastInitialPrompt.current === initialPrompt) return;
-    lastInitialPrompt.current = initialPrompt;
+    if (lastInitialRequest.current === initialRequest) return;
+    lastInitialRequest.current = initialRequest;
     onPromptConsumed();
-    void send(initialPrompt, true);
-  }, [initialPrompt, onPromptConsumed, send]);
+    if (initialRequest.timeBudgetMinutes !== undefined) setBudget(initialRequest.timeBudgetMinutes);
+    void send(initialRequest.prompt, true, initialRequest);
+  }, [initialRequest, onPromptConsumed, send]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -111,7 +121,7 @@ export function GeeslingPanel({ origin, freeOnly, initialPrompt, onPromptConsume
         renderItem={({ item }) =>
           item.role === "user" ? (
             <View style={styles.userBubble}>
-              <Text style={[text.body, { color: colors.white }]}>{item.text}</Text>
+              <Text style={[text.body, { color: colors.white }]}>{item.display ?? item.text}</Text>
             </View>
           ) : (
             <View style={{ gap: 8 }}>

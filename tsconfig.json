@@ -15,8 +15,9 @@
     "expo-env.d.ts"
   ],
   "exclude": [
+    "ingest",
     "node_modules",
     "supabase",
-    "ingest"
+    "tests"
   ]
 }

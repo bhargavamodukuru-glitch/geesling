@@ -2,16 +2,24 @@ import { useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Goose } from "@/components/Goose";
+import { PlannerFlow } from "@/components/PlannerFlow";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { TorontoPixelBackdrop } from "@/components/TorontoPixelBackdrop";
+import { SHORTCUT_VIBES, VIBES, type LatLng, type PlanRequest, type Vibe } from "@/lib/planner";
 import { colors, fonts, text } from "@/lib/theme";
 
 interface Props {
-  onAsk: (prompt: string) => void;
+  onAsk: (request: PlanRequest) => void;
   onSkip: () => void;
+  userLocation: LatLng | null;
+  onLocate: () => Promise<LatLng | null>;
 }
 
-export function GeeslingWelcome({ onAsk, onSkip }: Props) {
+type Mode = "home" | "planner" | "text";
+
+export function GeeslingWelcome({ onAsk, onSkip, userLocation, onLocate }: Props) {
+  const [mode, setMode] = useState<Mode>("home");
+  const [vibe, setVibe] = useState<Vibe | null>(null);
   const [prompt, setPrompt] = useState("");
   const [nightMode, setNightMode] = useState(false);
   const [now, setNow] = useState(() => new Date());
@@ -33,7 +41,11 @@ export function GeeslingWelcome({ onAsk, onSkip }: Props) {
   }).format(now);
   const submit = () => {
     const value = prompt.trim();
-    if (value) onAsk(value);
+    if (value) onAsk({ prompt: value });
+  };
+  const startPlanner = (start: Vibe | null) => {
+    setVibe(start);
+    setMode("planner");
   };
 
   return (
@@ -64,45 +76,80 @@ export function GeeslingWelcome({ onAsk, onSkip }: Props) {
             </View>
           </View>
 
-          <View style={styles.conversation} accessibilityLabel="Chat with Geesling">
-            <View style={styles.gooseMessageRow}>
-              <View style={styles.avatar}><Goose size={2.2} walking={false} /></View>
-              <Panel style={styles.greeting} shadow={3}>
-                <Text style={styles.honk}>HONK!</Text>
-                <Text style={text.body}>
-                  Need a few ideas on what to do today? Tell me what vibe you’re feeling and I shall waddle you around the city.
-                </Text>
-              </Panel>
-            </View>
-
-            <View style={styles.userMessageRow}>
-              <View style={styles.composerBubble}>
-                <TextInput
-                  value={prompt}
-                  onChangeText={setPrompt}
-                  placeholder="What are you in the mood for?"
-                  placeholderTextColor={colors.inkSoft}
-                  style={styles.input}
-                  multiline
-                  maxLength={1200}
-                  accessibilityLabel="Tell Geesling what you would like to do"
-                  onSubmitEditing={submit}
-                  onKeyPress={(event) => {
-                    const native = event.nativeEvent as { key: string; shiftKey?: boolean };
-                    if (Platform.OS === "web" && native.key === "Enter" && !native.shiftKey) {
-                      event.preventDefault();
-                      submit();
-                    }
-                  }}
-                  submitBehavior="submit"
-                  returnKeyType="send"
-                />
+          {mode === "planner" ? (
+            <PlannerFlow
+              initialVibe={vibe}
+              userLocation={userLocation}
+              onLocate={onLocate}
+              onSubmit={onAsk}
+              onCancel={() => setMode("home")}
+            />
+          ) : (
+            <View style={styles.conversation} accessibilityLabel="Chat with Geesling">
+              <View style={styles.gooseMessageRow}>
+                <View style={styles.avatar}><Goose size={2.2} walking={false} /></View>
+                <Panel style={styles.greeting} shadow={3}>
+                  <Text style={styles.honk}>HONK!</Text>
+                  <Text style={text.body}>
+                    {mode === "home"
+                      ? "Nothing planned? Answer a few quick questions and I shall waddle up a plan that fits your time and budget."
+                      : "Need a few ideas on what to do today? Tell me what vibe you’re feeling and I shall waddle you around the city."}
+                  </Text>
+                </Panel>
               </View>
+
+              {mode === "home" ? (
+                <>
+                  <View style={styles.ctaRow}>
+                    <PixelButton label="Make a plan" icon="🪿" tone="red" style={styles.cta} textStyle={styles.ctaText} onPress={() => startPlanner(null)} />
+                  </View>
+                  <View style={styles.shortcutBlock}>
+                    <Text style={[styles.shortcutLabel, nightMode && styles.nightClock]}>OR START WITH</Text>
+                    <View style={styles.shortcuts}>
+                      {SHORTCUT_VIBES.map((id) => {
+                        const v = VIBES.find((x) => x.id === id);
+                        return v ? <PixelButton key={id} label={v.label} icon={v.icon} small onPress={() => startPlanner(id)} /> : null;
+                      })}
+                    </View>
+                  </View>
+                  <Pressable onPress={() => setMode("text")} accessibilityRole="link" style={[styles.skip, styles.pill]}>
+                    <Text style={styles.pillText}>or just tell me what you’re after</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <View style={styles.userMessageRow}>
+                    <View style={styles.composerBubble}>
+                      <TextInput
+                        value={prompt}
+                        onChangeText={setPrompt}
+                        placeholder="What are you in the mood for?"
+                        placeholderTextColor={colors.inkSoft}
+                        style={styles.input}
+                        multiline
+                        maxLength={1200}
+                        accessibilityLabel="Tell Geesling what you would like to do"
+                        onSubmitEditing={submit}
+                        onKeyPress={(event) => {
+                          const native = event.nativeEvent as { key: string; shiftKey?: boolean };
+                          if (Platform.OS === "web" && native.key === "Enter" && !native.shiftKey) {
+                            event.preventDefault();
+                            submit();
+                          }
+                        }}
+                        submitBehavior="submit"
+                        returnKeyType="send"
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.sendRow}>
+                    <PixelButton label="← Back" small onPress={() => setMode("home")} />
+                    <PixelButton label="Find my walk" tone="red" disabled={!prompt.trim()} onPress={submit} />
+                  </View>
+                </>
+              )}
             </View>
-            <View style={styles.sendRow}>
-              <PixelButton label="Find my walk" tone="red" disabled={!prompt.trim()} onPress={submit} />
-            </View>
-          </View>
+          )}
 
           <Pressable onPress={onSkip} accessibilityRole="link" style={styles.skip}>
             <Text style={[styles.skipText, nightMode && styles.nightSkipText]}>Skip to live map →</Text>
@@ -134,6 +181,12 @@ const styles = StyleSheet.create({
   gooseMessageRow: { alignSelf: "flex-start", flexDirection: "row", alignItems: "flex-end", gap: 9, width: "92%" },
   avatar: { width: 38, height: 38, alignItems: "center", justifyContent: "center", backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
   greeting: { flex: 1, gap: 5, padding: 16, backgroundColor: colors.paper },
+  ctaRow: { alignItems: "center" },
+  cta: { minWidth: 240, paddingVertical: 14 },
+  ctaText: { fontSize: 24, lineHeight: 28 },
+  shortcutBlock: { gap: 8, alignItems: "center" },
+  shortcutLabel: { fontFamily: fonts.heading, fontSize: 11, color: colors.inkSoft, letterSpacing: 1 },
+  shortcuts: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 },
   userMessageRow: { width: "100%", alignItems: "flex-end" },
   composerBubble: { width: "82%", minHeight: 96, backgroundColor: colors.gold, borderWidth: 3, borderColor: colors.ink, borderRadius: 16, borderBottomRightRadius: 3, paddingHorizontal: 10, paddingVertical: 8 },
   honk: { fontFamily: fonts.heading, fontSize: 19, color: colors.accent },
@@ -148,8 +201,11 @@ const styles = StyleSheet.create({
     color: colors.ink,
     textAlignVertical: "top",
   },
-  sendRow: { alignItems: "flex-end" },
+  sendRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   skip: { alignSelf: "center", paddingHorizontal: 14, paddingVertical: 8 },
   skipText: { color: colors.wood, fontFamily: fonts.heading, fontSize: 17, textDecorationLine: "underline" },
   nightSkipText: { color: "#F2C14E" },
+  // Paper pill so the link stays readable over the skyline backdrop in day and night scenes.
+  pill: { backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
+  pillText: { color: colors.ink, fontFamily: fonts.body, fontSize: 18, textDecorationLine: "underline" },
 });

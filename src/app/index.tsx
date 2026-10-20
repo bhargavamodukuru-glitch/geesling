@@ -14,6 +14,7 @@ import { SetupNotice } from "@/components/SetupNotice";
 import { useLocation } from "@/hooks/useLocation";
 import { useSaved } from "@/hooks/useSaved";
 import { fetchEventsInBounds } from "@/lib/api";
+import type { PlanRequest } from "@/lib/planner";
 import { isConfigured } from "@/lib/supabase";
 import { colors, fonts } from "@/lib/theme";
 import type { Bounds, EventFilters, EventItem, MapItem, Walk } from "@/lib/types";
@@ -28,11 +29,11 @@ export default function HomeScreen() {
 function Home() {
   const { width } = useWindowDimensions();
   const wide = width >= 900;
-  const { location } = useLocation();
+  const { location, locate } = useLocation();
   const { saved } = useSaved();
 
   const [entered, setEntered] = useState(false);
-  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const [pendingRequest, setPendingRequest] = useState<PlanRequest | null>(null);
   const [transition, setTransition] = useState<"walk" | "map" | null>(null);
   const [tab, setTab] = useState<Tab>("happening");
   const [filters, setFilters] = useState<EventFilters>({ window: "now", date: null, freeOnly: false, paidOnly: false, drinksOnly: false, rsvpOnly: false, categories: [] });
@@ -119,8 +120,8 @@ function Home() {
     setFocusKey((k) => k + 1);
   }, []);
 
-  const startPrompt = useCallback((prompt: string) => {
-    setPendingPrompt(prompt);
+  const startPrompt = useCallback((request: PlanRequest) => {
+    setPendingRequest(request);
     setTransition("walk");
     setEntered(true);
     setTab("geesling");
@@ -137,7 +138,7 @@ function Home() {
     setWalk(null);
     setTab("happening");
   }, []);
-  const consumePrompt = useCallback(() => setPendingPrompt(null), []);
+  const consumePrompt = useCallback(() => setPendingRequest(null), []);
   const completePrompt = useCallback(() => setTransition(null), []);
 
   const selectItem = useCallback((item: MapItem | null, note: string | null = null) => {
@@ -215,7 +216,7 @@ function Home() {
           <GeeslingPanel
             origin={location}
             freeOnly={filters.freeOnly}
-            initialPrompt={pendingPrompt}
+            initialRequest={pendingRequest}
             onPromptConsumed={consumePrompt}
             onInitialPromptComplete={completePrompt}
             onWalk={showWalk}
@@ -228,7 +229,7 @@ function Home() {
 
   if (!entered) return transition === "map"
     ? <GeeslingLoader label="Finding the live map…" />
-    : <GeeslingWelcome onAsk={startPrompt} onSkip={skipToMap} />;
+    : <GeeslingWelcome onAsk={startPrompt} onSkip={skipToMap} userLocation={location} onLocate={locate} />;
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
