@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Linking from "expo-linking";
 import { FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Goose } from "@/components/Goose";
+import { PlannerFlow } from "@/components/PlannerFlow";
 import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { WalkCard } from "@/components/WalkCard";
 import { askGeesling } from "@/lib/api";
-import type { PlanRequest } from "@/lib/planner";
+import { MAX_RETRIES, buildRetryRequest, type LatLng, type PlanRequest } from "@/lib/planner";
 import { colors, fonts, text } from "@/lib/theme";
-import type { ChatMessage, MapItem, Walk } from "@/lib/types";
+import { itemTitle, type ChatMessage, type MapItem, type Walk } from "@/lib/types";
 
 const VIBES: { label: string; icon: string; prompt: string }[] = [
   { label: "Step outside your comfort zone", icon: "🔥", prompt: "I'm looking to step out of my comfort zone. Where in Toronto is best to do this right now?" },
@@ -32,6 +33,7 @@ const BUDGETS: { label: string; minutes: number | null }[] = [
 
 interface Props {
   origin: { lat: number; lng: number } | null;
+  onLocate: () => Promise<LatLng | null>;
   freeOnly: boolean;
   initialRequest: PlanRequest | null;
   onPromptConsumed: () => void;
@@ -43,16 +45,20 @@ interface Props {
 let counter = 0;
 const nextId = () => `m${Date.now()}-${counter++}`;
 
-export function GeeslingPanel({ origin, freeOnly, initialRequest, onPromptConsumed, onInitialPromptComplete, onWalk, onSelectStop }: Props) {
+export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPromptConsumed, onInitialPromptComplete, onWalk, onSelectStop }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [budget, setBudget] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [adjusting, setAdjusting] = useState(false);
+  // What the latest walk answers: the original request, every name shown so far, and how many retries were used.
+  const [plan, setPlan] = useState<{ request: PlanRequest; shown: string[]; retries: number } | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const lastInitialRequest = useRef<PlanRequest | null>(null);
 
   // `request` carries the guided planner's choices; fields it leaves undefined fall back to this panel's own state.
-  const send = useCallback(async (prompt: string, initial = false, request?: PlanRequest) => {
+  // `kind: "retry"` is "Try another": same request, asking for something different.
+  const send = useCallback(async (prompt: string, initial = false, request?: PlanRequest, kind: "new" | "retry" = "new") => {
     const trimmed = prompt.trim();
     if (!trimmed || busy) return;
     const userMessage: ChatMessage = { id: nextId(), role: "user", text: trimmed, display: request?.display };
@@ -72,7 +78,15 @@ export function GeeslingPanel({ origin, freeOnly, initialRequest, onPromptConsum
         travel: request?.travel,
       });
       setMessages((m) => [...m, { id: nextId(), role: "assistant", text: reply.message, walk: reply.walk, musicCrawlerLink }]);
-      if (reply.walk) onWalk(reply.walk);
+      if (reply.walk) {
+        const names = reply.walk.stops.map((s) => itemTitle(s.item));
+        setPlan((prev) =>
+          kind === "retry" && prev
+            ? { ...prev, shown: [...prev.shown, ...names], retries: prev.retries + 1 }
+            : { request: request ?? { prompt: trimmed }, shown: names, retries: 0 },
+        );
+        onWalk(reply.walk);
+      }
     } catch (e) {
       setMessages((m) => [...m, { id: nextId(), role: "assistant", text: `Honk… something went wrong: ${(e as Error).message}`, error: true }]);
     } finally {
@@ -81,6 +95,14 @@ export function GeeslingPanel({ origin, freeOnly, initialRequest, onPromptConsum
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [busy, messages, origin, budget, freeOnly, onWalk, onInitialPromptComplete]);
+
+  const lastWalkId = useMemo(() => [...messages].reverse().find((m) => m.walk)?.id ?? null, [messages]);
+  const retriesLeft = plan ? MAX_RETRIES - plan.retries : 0;
+  const tryAnother = () => {
+    if (!plan || busy || retriesLeft <= 0) return;
+    const retry = buildRetryRequest(plan.request, plan.shown);
+    void send(retry.prompt, false, retry, "retry");
+  };
 
   useEffect(() => {
     if (!initialRequest) {
@@ -93,6 +115,24 @@ export function GeeslingPanel({ origin, freeOnly, initialRequest, onPromptConsum
     if (initialRequest.timeBudgetMinutes !== undefined) setBudget(initialRequest.timeBudgetMinutes);
     void send(initialRequest.prompt, true, initialRequest);
   }, [initialRequest, onPromptConsumed, send]);
+
+  if (adjusting) {
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }} keyboardShouldPersistTaps="handled">
+        <PlannerFlow
+          initialVibe={null}
+          initialPrefs={plan?.request.prefs}
+          userLocation={origin}
+          onLocate={onLocate}
+          onCancel={() => setAdjusting(false)}
+          onSubmit={(request) => {
+            setAdjusting(false);
+            void send(request.prompt, false, request, "new");
+          }}
+        />
+      </ScrollView>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -131,6 +171,16 @@ export function GeeslingPanel({ origin, freeOnly, initialRequest, onPromptConsum
                 <Text style={text.body}>{item.text}</Text>
               </Panel>
               {item.walk ? <WalkCard walk={item.walk} onShowOnMap={onWalk} onSelectStop={onSelectStop} /> : null}
+              {item.id === lastWalkId && !busy ? (
+                <View style={styles.resultActions}>
+                  {retriesLeft > 0 ? (
+                    <PixelButton label="Try another" icon="🎲" tone="gold" onPress={tryAnother} />
+                  ) : (
+                    <Text style={[text.small, { flex: 1 }]}>Want something different? Adjust your choices.</Text>
+                  )}
+                  <PixelButton label="Adjust" icon="🎚️" onPress={() => setAdjusting(true)} />
+                </View>
+              ) : null}
               {item.musicCrawlerLink ? (
                 <PixelButton
                   label="Browse live music on MusicCrawler"
@@ -190,6 +240,7 @@ const styles = StyleSheet.create({
   speaker: { fontFamily: fonts.heading, fontSize: 11, color: colors.accent },
   chipScroll: { flexGrow: 0, flexShrink: 0 },
   chips: { gap: 6, alignItems: "center", paddingVertical: 4 },
+  resultActions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   userBubble: { alignSelf: "flex-end", maxWidth: "85%", backgroundColor: colors.wood, borderWidth: 3, borderColor: colors.ink, padding: 10 },
   thinking: { flexDirection: "row", alignItems: "center", gap: 10, padding: 8 },
   composer: { borderTopWidth: 3, borderColor: colors.ink, backgroundColor: colors.parchment, paddingHorizontal: 12, paddingBottom: 10, gap: 4 },

@@ -33,6 +33,8 @@ export interface PlanRequest {
   origin?: LatLng | null;
   /** "walk" makes the server route every leg on foot (no TTC). */
   travel?: TravelChoice;
+  /** The choices behind a planner request, so "Adjust" can reopen the planner with them filled in. */
+  prefs?: PlanPreferences;
 }
 
 interface Option<T extends string> {
@@ -137,5 +139,31 @@ export function buildPlanRequest(prefs: PlanPreferences, userLocation: LatLng | 
     freeOnly: prefs.budget === "free",
     origin,
     travel: prefs.travel,
+    prefs,
   };
+}
+
+/** How many times "Try another" can follow one request before the person is nudged to adjust their choices. */
+export const MAX_RETRIES = 3;
+
+const PROMPT_LIMIT = 1200; // what the guide accepts
+const RETRY_TAIL = " Suggest a clearly different plan.";
+
+/**
+ * The same request again, asking for something different. Pass the ORIGINAL request (not an earlier retry)
+ * and every place or event name already shown for it; names that don't fit in the prompt are dropped, oldest first.
+ */
+export function buildRetryRequest(original: PlanRequest, shownNames: string[]): PlanRequest {
+  const names = [...new Set(shownNames.map((n) => n.trim()).filter(Boolean))];
+  const lead = " I have already seen these, so avoid every one of them:";
+  const kept: string[] = [];
+  let length = original.prompt.length + RETRY_TAIL.length + lead.length + 1;
+  for (const name of names.reverse()) {
+    const cost = name.length + 2; // "; "
+    if (length + cost > PROMPT_LIMIT) break;
+    kept.unshift(name);
+    length += cost;
+  }
+  const avoid = kept.length ? `${lead} ${kept.join("; ")}.` : "";
+  return { ...original, prompt: `${original.prompt}${avoid}${RETRY_TAIL}`, display: "Another plan, please" };
 }

@@ -215,6 +215,7 @@ function Home() {
         <View style={[{ flex: 1 }, tab !== "geesling" && styles.hidden]}>
           <GeeslingPanel
             origin={location}
+            onLocate={locate}
             freeOnly={filters.freeOnly}
             initialRequest={pendingRequest}
             onPromptConsumed={consumePrompt}

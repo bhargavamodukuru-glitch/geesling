@@ -8,7 +8,9 @@ import {
   TIMES,
   TRAVELS,
   VIBES,
+  MAX_RETRIES,
   buildPlanRequest,
+  buildRetryRequest,
   type PlanPreferences,
 } from "../src/lib/planner.ts";
 
@@ -87,4 +89,39 @@ test("every neighbourhood anchor is inside Toronto", () => {
     assert.ok(area.center.lat > 43.58 && area.center.lat < 43.86, `${area.id} latitude`);
     assert.ok(area.center.lng > -79.64 && area.center.lng < -79.12, `${area.id} longitude`);
   }
+});
+
+test("a planner request remembers its choices so Adjust can reopen them", () => {
+  const choices = prefs({ vibe: "date", budget: "u25" });
+  assert.deepEqual(buildPlanRequest(choices, null).prefs, choices);
+});
+
+test("Try another keeps every constraint and asks to avoid what was already shown", () => {
+  const original = buildPlanRequest(prefs({ time: "short", budget: "free", area: "yorkville", travel: "walk" }), null);
+  const retry = buildRetryRequest(original, ["Free Night at the Museum", "The Cups", "Free Night at the Museum"]);
+  assert.equal(retry.timeBudgetMinutes, 120);
+  assert.equal(retry.freeOnly, true);
+  assert.equal(retry.travel, "walk");
+  assert.deepEqual(retry.origin, original.origin);
+  assert.match(retry.prompt, /avoid every one of them: Free Night at the Museum; The Cups\./);
+  assert.equal(retry.prompt.split("Free Night at the Museum").length - 1, 1, "duplicate names are listed once");
+  assert.equal(retry.display, "Another plan, please");
+});
+
+test("Try another asks for something different even when nothing is listed", () => {
+  const retry = buildRetryRequest({ prompt: "cheap dumplings" }, []);
+  assert.equal(retry.prompt, "cheap dumplings Suggest a clearly different plan.");
+});
+
+test("a long avoid list is trimmed (oldest first) to stay under the prompt limit", () => {
+  const original = buildPlanRequest(prefs(), null);
+  const names = Array.from({ length: 80 }, (_, i) => `Venue number ${i} with a fairly long name`);
+  const retry = buildRetryRequest(original, names);
+  assert.ok(retry.prompt.length <= 1200, `${retry.prompt.length} chars`);
+  assert.match(retry.prompt, /Venue number 79/);
+  assert.doesNotMatch(retry.prompt, /Venue number 0 /);
+});
+
+test("Try another is capped so it does not become endless regenerating", () => {
+  assert.equal(MAX_RETRIES, 3);
 });

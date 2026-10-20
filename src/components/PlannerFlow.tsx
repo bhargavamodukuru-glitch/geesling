@@ -21,6 +21,8 @@ import { colors, fonts, text } from "@/lib/theme";
 interface Props {
   /** Set when the person tapped a home-screen shortcut: the vibe step is already answered. */
   initialVibe: Vibe | null;
+  /** Set by "Adjust": reopen the planner with the last choices filled in, starting from the first question. */
+  initialPrefs?: PlanPreferences;
   /** Location already granted earlier, if any. Permission is only asked when "Near me" is tapped. */
   userLocation: LatLng | null;
   onLocate: () => Promise<LatLng | null>;
@@ -40,13 +42,18 @@ function Chips({ children }: { children: ReactNode }) {
   return <View style={styles.chips}>{children}</View>;
 }
 
-export function PlannerFlow({ initialVibe, userLocation, onLocate, onSubmit, onCancel }: Props) {
+export function PlannerFlow({ initialVibe, initialPrefs, userLocation, onLocate, onSubmit, onCancel }: Props) {
   const [step, setStep] = useState(initialVibe ? 1 : 0);
-  const [prefs, setPrefs] = useState<PlanPreferences>({
-    ...DEFAULT_PREFERENCES,
-    vibe: initialVibe ?? DEFAULT_PREFERENCES.vibe,
-    area: userLocation ? "near" : DEFAULT_PREFERENCES.area,
-  });
+  const [prefs, setPrefs] = useState<PlanPreferences>(() =>
+    initialPrefs
+      ? // "Near me" can only be reused while location is still available.
+        { ...initialPrefs, area: initialPrefs.area === "near" && !userLocation ? DEFAULT_PREFERENCES.area : initialPrefs.area }
+      : {
+          ...DEFAULT_PREFERENCES,
+          vibe: initialVibe ?? DEFAULT_PREFERENCES.vibe,
+          area: userLocation ? "near" : DEFAULT_PREFERENCES.area,
+        },
+  );
   const [nearCoords, setNearCoords] = useState<LatLng | null>(userLocation);
   const [locating, setLocating] = useState(false);
   const [locationNote, setLocationNote] = useState<string | null>(null);
@@ -152,6 +159,7 @@ export function PlannerFlow({ initialVibe, userLocation, onLocate, onSubmit, onC
       <View style={styles.nav}>
         <PixelButton label="← Back" small onPress={() => (atStart ? onCancel() : setStep(step - 1))} />
         <View style={{ flex: 1 }} />
+        {step === 0 && initialPrefs ? <PixelButton label="Next →" tone="gold" onPress={() => setStep(1)} /> : null}
         {step === 1 ? <PixelButton label="Next →" tone="gold" onPress={() => setStep(2)} /> : null}
         {step === 2 ? <PixelButton label="Plan it" tone="red" disabled={locating} onPress={submit} /> : null}
       </View>

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Panel, PixelButton, Tag } from "@/components/Pixel";
 import { useSaved } from "@/hooks/useSaved";
 import { clock, distance, minutes, priceLabel } from "@/lib/format";
 import { openWalkInMaps, shareWalk } from "@/lib/links";
+import { costLine, formatDuration, summarizePlan, travelLine } from "@/lib/planSummary";
 import { colors, fonts, text } from "@/lib/theme";
 import { itemTitle, type MapItem, type Walk } from "@/lib/types";
 
@@ -17,14 +18,22 @@ export function WalkCard({ walk, onShowOnMap, onSelectStop }: Props) {
   const { isSaved, toggle } = useSaved();
   const [shareNote, setShareNote] = useState<string | null>(null);
   const saved = isSaved("walk", walk.id);
-  const totalCost = walk.stops.every((s) => s.item.is_free) ? "All free" : "Some paid stops";
+  const summary = useMemo(() => summarizePlan(walk), [walk]);
 
   return (
     <Panel tone="parchment" style={styles.card}>
       <Text style={styles.title}>{walk.title}</Text>
-      <Text style={text.small}>
-        {walk.stops.length} stops · {walk.total_minutes ? minutes(walk.total_minutes * 60) : "flexible"} · {totalCost}
-      </Text>
+      <View style={styles.summary} accessibilityLabel="Plan summary">
+        <Text style={styles.summaryTitle}>
+          ⏱️ {formatDuration(summary.totalMinutes)} total · {summary.stops} stop{summary.stops === 1 ? "" : "s"}
+        </Text>
+        <Text style={text.small}>
+          {travelLine(summary)} · {formatDuration(summary.stopMinutes)} at stops
+          {summary.waitMinutes ? ` · about ${formatDuration(summary.waitMinutes)} waiting for an event to start` : ""}
+        </Text>
+        <Text style={styles.summaryRow}>💵 {costLine(summary.cost)}</Text>
+        {summary.bookAhead.length ? <Text style={[styles.summaryRow, styles.book]}>🎟️ Book ahead: {summary.bookAhead.join(", ")}</Text> : null}
+      </View>
 
       {walk.stops.map((stop) => (
         <View key={stop.order}>
@@ -87,6 +96,10 @@ const styles = StyleSheet.create({
   badge: { width: 26, height: 26, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },
   badgeText: { fontFamily: fonts.body, color: colors.white, fontSize: 22, lineHeight: 22 },
   stopTitle: { fontFamily: fonts.heading, fontSize: 14, color: colors.ink },
+  summary: { backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, padding: 8, gap: 3 },
+  summaryTitle: { fontFamily: fonts.heading, fontSize: 14, color: colors.ink },
+  summaryRow: { fontFamily: fonts.body, fontSize: 19, lineHeight: 20, color: colors.ink },
+  book: { color: colors.accent },
   outro: { fontStyle: "italic" },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
 });
