@@ -14,6 +14,7 @@ import { SetupNotice } from "@/components/SetupNotice";
 import { useLocation } from "@/hooks/useLocation";
 import { useSaved } from "@/hooks/useSaved";
 import { fetchEventsInBounds } from "@/lib/api";
+import { isInEventArea } from "@/lib/area";
 import type { PlanRequest } from "@/lib/planner";
 import { isConfigured } from "@/lib/supabase";
 import { colors, fonts } from "@/lib/theme";
@@ -29,7 +30,7 @@ export default function HomeScreen() {
 function Home() {
   const { width } = useWindowDimensions();
   const wide = width >= 900;
-  const { location, locate } = useLocation();
+  const { location, status: locationStatus, locate } = useLocation();
   const { saved } = useSaved();
 
   const [entered, setEntered] = useState(false);
@@ -44,6 +45,7 @@ function Home() {
   const [selected, setSelected] = useState<{ item: MapItem; note: string | null } | null>(null);
   const [walk, setWalk] = useState<Walk | null>(null);
   const [focusKey, setFocusKey] = useState(0);
+  const [locationNoteHidden, setLocationNoteHidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [mapHeight, setMapHeight] = useState<number | undefined>(undefined);
   const [mapShare, setMapShare] = useState(() =>
@@ -128,12 +130,17 @@ function Home() {
   }, []);
   const skipToMap = useCallback(() => {
     setTransition("map");
-    setTimeout(() => {
+    // Ask for location while the loader shows so the map opens on the person's own area. Don't hold them up
+    // for long: if the prompt is ignored the map opens on Toronto and recenters when they allow it.
+    const located = locate();
+    const minimum = new Promise<void>((resolve) => setTimeout(resolve, 800));
+    const patience = new Promise<void>((resolve) => setTimeout(resolve, 6000));
+    void Promise.race([Promise.all([located, minimum]), patience]).then(() => {
       setEntered(true);
       setTab("happening");
       setTransition(null);
-    }, 800);
-  }, []);
+    });
+  }, [locate]);
   const clearWalk = useCallback(() => {
     setWalk(null);
     setTab("happening");
@@ -154,7 +161,8 @@ function Home() {
         walk={walk}
         selectedId={selected?.item.id ?? null}
         userLocation={location}
-        focusKey={focusKey}
+        // The first time the person's location is known once the map is open, the camera moves to their area.
+        focusKey={focusKey + (entered && location ? 1 : 0)}
         onSelect={(item) => selectItem(item)}
         onBoundsChange={onBoundsChange}
       />
@@ -164,6 +172,15 @@ function Home() {
             {walk.title}
           </Text>
           <PixelButton label="Clear walk" small onPress={clearWalk} />
+        </View>
+      ) : null}
+      {!walk && entered && !locationNoteHidden && (locationStatus === "denied" || locationStatus === "error") ? (
+        <View style={styles.walkBanner}>
+          <Text style={styles.noteText}>
+            {locationStatus === "denied" ? "Location is off, so this is Toronto. Allow location to see your own area." : "Couldn’t find your location, so this is Toronto."}
+          </Text>
+          <PixelButton label="Try again" small onPress={() => void locate()} />
+          <PixelButton label="✕" small onPress={() => setLocationNoteHidden(true)} accessibilityLabel="Dismiss location message" />
         </View>
       ) : null}
       {selected ? (
@@ -208,6 +225,7 @@ function Home() {
             onFilters={setFilters}
             onSelect={(e) => selectItem(e)}
             onRefresh={() => setReloadKey((k) => k + 1)}
+            outsideEventArea={bounds ? !isInEventArea((bounds.minLat + bounds.maxLat) / 2, (bounds.minLng + bounds.maxLng) / 2) : false}
           />
         ) : null}
         {tab === "saved" ? <SavedPanel onSelect={(i) => selectItem(i)} onShowWalk={showWalk} /> : null}
@@ -286,6 +304,7 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   walkBannerText: { flex: 1, fontFamily: fonts.heading, fontSize: 14, color: colors.ink },
+  noteText: { flex: 1, fontFamily: fonts.body, fontSize: 17, lineHeight: 18, color: colors.ink },
   sheetWrap: { position: "absolute", left: 10, right: 10, bottom: 10, maxWidth: 520, alignSelf: "center" },
   panel: { flex: 1, borderTopWidth: 0, borderColor: colors.ink, backgroundColor: colors.parchment },
   panelWide: { borderLeftWidth: 0 },

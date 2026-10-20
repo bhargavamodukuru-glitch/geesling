@@ -4,6 +4,7 @@ import { Panel, PixelButton, Tag } from "@/components/Pixel";
 import { useSaved } from "@/hooks/useSaved";
 import { placeType, priceLabel, whenLabel } from "@/lib/format";
 import { openDirections } from "@/lib/links";
+import { isTopRated } from "@/lib/placeBadges";
 import { descriptionWithoutLinks, socialLinksForItem } from "@/lib/socialLinks";
 import { CATEGORY_LABELS, colors, fonts, text } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
@@ -40,6 +41,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
             {item.kind === "event" && item.is_live ? <Tag label="LIVE NOW" color={colors.live} /> : null}
             {item.involves_alcohol ? <Tag label="🍻 Drinks" color={colors.gold} textColor={colors.ink} /> : null}
             {isPhotoSpot ? <Tag label="📸 Photo spot" color={colors.photoPin} /> : null}
+            {isTopRated(item) ? <Tag label="★ Top rated" color={colors.gold} textColor={colors.ink} /> : null}
             {item.kind === "event" && item.age_min ? <Tag label={`${item.age_min}+`} color={colors.ink} /> : null}
           </View>
           <Text style={text.h2} numberOfLines={3}>

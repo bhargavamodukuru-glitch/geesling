@@ -63,12 +63,60 @@ export const TIMES: (Option<TimeChoice> & { minutes: number | null; sentence: st
   { id: "flexible", label: "Flexible", icon: "🔀", minutes: null, sentence: "" },
 ];
 
-export const BUDGETS: (Option<BudgetChoice> & { sentence: string })[] = [
-  { id: "free", label: "Free", icon: "🟩", sentence: "Only free things." },
-  { id: "u25", label: "Under $25", icon: "💵", sentence: "Keep the total spend for the whole group under $25, counting tickets, food and drinks." },
-  { id: "u50", label: "Under $50", icon: "💵", sentence: "Keep the total spend for the whole group under $50, counting tickets, food and drinks." },
-  { id: "flexible", label: "Flexible", icon: "🔀", sentence: "Budget is flexible, but include some free or inexpensive options." },
+export const BUDGETS: (Option<BudgetChoice> & { amount: number | null })[] = [
+  { id: "free", label: "Free", icon: "🟩", amount: 0 },
+  { id: "u25", label: "Under $25", icon: "💵", amount: 25 },
+  { id: "u50", label: "Under $50", icon: "💵", amount: 50 },
+  { id: "flexible", label: "Flexible", icon: "🔀", amount: null },
 ];
+
+/**
+ * Who the budget covers depends on the outing, so the heading, the note and the sentence sent to the guide
+ * all come from here instead of always saying "the whole group".
+ */
+export const BUDGET_WORDING: Record<Vibe, { heading: string; note: string; limit: (amount: number) => string }> = {
+  date: {
+    heading: "BUDGET FOR THE TWO OF YOU",
+    note: "Counts tickets, food and drinks for both of you.",
+    limit: (n) => `Keep the total spend for the two of us under $${n}, counting tickets, food and drinks.`,
+  },
+  friends: {
+    heading: "TOTAL BUDGET FOR THE GROUP",
+    note: "Counts tickets, food and drinks for everyone together.",
+    limit: (n) => `Keep the total spend for the whole group under $${n}, counting tickets, food and drinks.`,
+  },
+  solo: {
+    heading: "YOUR BUDGET",
+    note: "Counts your tickets, food and drinks.",
+    limit: (n) => `Keep my total spend under $${n}, counting tickets, food and drinks.`,
+  },
+  new: {
+    heading: "BUDGET FOR YOUR ADVENTURE",
+    note: "Counts tickets, food and drinks together.",
+    limit: (n) => `Keep the total spend for the whole outing under $${n}, counting tickets, food and drinks.`,
+  },
+  chill: {
+    heading: "BUDGET FOR A CHILL OUTING",
+    note: "Counts tickets, food and drinks together.",
+    limit: (n) => `Keep the total spend for the whole outing under $${n}, counting tickets, food and drinks.`,
+  },
+  culture: {
+    heading: "BUDGET FOR YOUR ARTSY OUTING",
+    note: "Counts tickets, food and drinks together.",
+    limit: (n) => `Keep the total spend for the whole outing under $${n}, counting tickets, food and drinks.`,
+  },
+  surprise: {
+    heading: "BUDGET FOR THE SURPRISE",
+    note: "Counts tickets, food and drinks together.",
+    limit: (n) => `Keep the total spend for the whole outing under $${n}, counting tickets, food and drinks.`,
+  },
+};
+
+function budgetSentence(budget: { id: BudgetChoice; amount: number | null }, vibe: Vibe): string {
+  if (budget.id === "free") return "Only free things.";
+  if (budget.amount === null) return "Budget is flexible, but include some free or inexpensive options.";
+  return BUDGET_WORDING[vibe].limit(budget.amount);
+}
 
 export const TRAVELS: (Option<TravelChoice> & { sentence: string })[] = [
   { id: "walk", label: "Walking", icon: "🚶", sentence: "We'll be on foot: keep every stop within walking distance and don't use transit." },
@@ -119,7 +167,7 @@ export function buildPlanRequest(prefs: PlanPreferences, userLocation: LatLng | 
   const prompt = [
     `Plan me ${vibe.sentence}.`,
     time.sentence,
-    budget.sentence,
+    budgetSentence(budget, prefs.vibe),
     area.sentence,
     travel.sentence,
     "Give me one plan that fits all of this, and tell me if anything needs booking or an RSVP ahead of time.",

@@ -5,6 +5,7 @@ import { Panel, PixelButton } from "@/components/Pixel";
 import {
   AREAS,
   BUDGETS,
+  BUDGET_WORDING,
   DEFAULT_PREFERENCES,
   TIMES,
   TRAVELS,
@@ -119,13 +120,13 @@ export function PlannerFlow({ initialVibe, initialPrefs, userLocation, onLocate,
                 <PixelButton key={t.id} label={t.label} icon={t.icon} small active={prefs.time === t.id} onPress={() => set("time", t.id)} />
               ))}
             </Chips>
-            <Text style={styles.group}>TOTAL BUDGET FOR THE WHOLE GROUP</Text>
+            <Text style={styles.group}>{BUDGET_WORDING[prefs.vibe].heading}</Text>
             <Chips>
               {BUDGETS.map((b) => (
                 <PixelButton key={b.id} label={b.label} icon={b.icon} small active={prefs.budget === b.id} onPress={() => set("budget", b.id)} />
               ))}
             </Chips>
-            <Text style={text.small}>Counts tickets, food and drinks together.</Text>
+            <Text style={text.small}>{BUDGET_WORDING[prefs.vibe].note}</Text>
           </>
         ) : null}
 

@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { pinLabel } from "@/lib/format";
+import { isTopRated } from "@/lib/placeBadges";
 import { CATEGORY_LABELS, colors, fonts } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
 
@@ -31,6 +32,7 @@ function PinView({ item, order, selected }: Props) {
   const icon = order !== undefined ? String(order) : item.kind === "event" ? (CATEGORY_LABELS[item.categories[0]]?.emoji ?? "⭐") : placeEmoji(item.types);
   const label = item.kind === "event" ? pinLabel(item) : null;
   const live = item.kind === "event" && item.is_live;
+  const topRated = isTopRated(item);
 
   return (
     <View style={styles.wrap} pointerEvents="none">
@@ -45,6 +47,11 @@ function PinView({ item, order, selected }: Props) {
         <View style={styles.sideSpacer} />
         <View style={[styles.pin, { backgroundColor: bg, borderColor: border, transform: [{ scale: selected ? 1.15 : 1 }] }]}>
           <Text style={order !== undefined ? styles.orderText : styles.icon}>{icon}</Text>
+          {topRated ? (
+            <View style={styles.starBadge}>
+              <Text style={styles.starText}>★</Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.side}>{item.involves_alcohol ? <Text style={styles.cheers}>🍻</Text> : null}</View>
       </View>
@@ -67,7 +74,10 @@ const styles = StyleSheet.create({
   sideSpacer: { width: 22 },
   side: { width: 22, alignItems: "flex-start" },
   cheers: { fontSize: 15, marginLeft: 2 },
-  pin: { width: 30, height: 30, borderWidth: 3, alignItems: "center", justifyContent: "center" },
+  pin: { width: 30, height: 30, borderWidth: 3, alignItems: "center", justifyContent: "center", overflow: "visible" },
+  // Gold star on places rated above 4.5 (see lib/placeBadges.ts).
+  starBadge: { position: "absolute", top: -10, right: -10, width: 18, height: 18, backgroundColor: colors.gold, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },
+  starText: { fontSize: 12, lineHeight: 14, color: colors.ink },
   icon: { fontSize: 14 },
   orderText: { fontFamily: fonts.body, fontSize: 24, lineHeight: 24, color: colors.white },
   pointer: {

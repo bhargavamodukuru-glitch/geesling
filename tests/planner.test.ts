@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   AREAS,
   BUDGETS,
+  BUDGET_WORDING,
   DEFAULT_PREFERENCES,
   DOWNTOWN,
   TIMES,
@@ -23,11 +24,37 @@ test("free budget turns on the free-only filter and says so in the prompt", () =
   assert.match(req.prompt, /Only free things/);
 });
 
-test("spend limits are stated as a total for the whole group", () => {
+test("spend limits are stated in the guide's prompt and do not turn on the free-only filter", () => {
   const req = buildPlanRequest(prefs({ budget: "u25" }), null);
   assert.equal(req.freeOnly, false);
-  assert.match(req.prompt, /total spend for the whole group under \$25/);
+  assert.match(req.prompt, /under \$25, counting tickets, food and drinks/);
   assert.match(buildPlanRequest(prefs({ budget: "u50" }), null).prompt, /under \$50/);
+});
+
+test("the budget wording fits each vibe: two of us, the group, just me", () => {
+  const sentence = (vibe: PlanPreferences["vibe"]) => buildPlanRequest(prefs({ vibe, budget: "u25" }), null).prompt;
+  assert.match(sentence("date"), /total spend for the two of us under \$25/);
+  assert.match(sentence("friends"), /total spend for the whole group under \$25/);
+  assert.match(sentence("solo"), /Keep my total spend under \$25/);
+  assert.doesNotMatch(sentence("solo"), /group|two of us/);
+  assert.doesNotMatch(sentence("date"), /whole group/);
+  assert.match(sentence("surprise"), /whole outing/);
+});
+
+test("every vibe has its own budget heading, and none of them claim a group unless it is one", () => {
+  const headings = Object.values(BUDGET_WORDING).map((w) => w.heading);
+  assert.equal(new Set(headings).size, headings.length, "headings are distinct");
+  assert.equal(BUDGET_WORDING.date.heading, "BUDGET FOR THE TWO OF YOU");
+  assert.equal(BUDGET_WORDING.solo.heading, "YOUR BUDGET");
+  assert.equal(BUDGET_WORDING.friends.heading, "TOTAL BUDGET FOR THE GROUP");
+  for (const [vibe, w] of Object.entries(BUDGET_WORDING)) {
+    if (vibe !== "friends") assert.doesNotMatch(w.heading, /GROUP/, vibe);
+  }
+});
+
+test("free and flexible budgets do not mention a spend limit", () => {
+  assert.doesNotMatch(buildPlanRequest(prefs({ budget: "free" }), null).prompt, /under \$/);
+  assert.doesNotMatch(buildPlanRequest(prefs({ budget: "flexible" }), null).prompt, /under \$/);
 });
 
 test("time choices map to minutes, and flexible means no limit", () => {

@@ -5,6 +5,7 @@ import { useSaved } from "@/hooks/useSaved";
 import { clock, distance, minutes, priceLabel } from "@/lib/format";
 import { openWalkInMaps, shareWalk } from "@/lib/links";
 import { costLine, formatDuration, summarizePlan, travelLine } from "@/lib/planSummary";
+import { isTopRated } from "@/lib/placeBadges";
 import { colors, fonts, text } from "@/lib/theme";
 import { itemTitle, type MapItem, type Walk } from "@/lib/types";
 
@@ -59,6 +60,7 @@ export function WalkCard({ walk, onShowOnMap, onSelectStop }: Props) {
               </Text>
               <Text style={text.small}>
                 {clock(stop.arrive_at)}–{clock(stop.leave_at)} · {priceLabel(stop.item)}
+                {stop.item.kind === "place" && isTopRated(stop.item) ? ` · ★ ${stop.item.rating}` : ""}
               </Text>
               {stop.item.kind === "event" && stop.item.rsvp_required ? <Tag label="🎟️ RSVP ahead" color={colors.accent} /> : null}
               <Text style={text.small}>{stop.why}</Text>
