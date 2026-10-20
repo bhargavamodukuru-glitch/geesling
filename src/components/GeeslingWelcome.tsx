@@ -43,7 +43,7 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation, onLocate }: Props
     const value = prompt.trim();
     if (value) onAsk({ prompt: value });
   };
-  const startPlanner = (start: Vibe | null) => {
+  const startPlanner = (start: Vibe) => {
     setVibe(start);
     setMode("planner");
   };
@@ -100,11 +100,8 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation, onLocate }: Props
 
               {mode === "home" ? (
                 <>
-                  <View style={styles.ctaRow}>
-                    <PixelButton label="Make a plan" icon="🪿" tone="red" style={styles.cta} textStyle={styles.ctaText} onPress={() => startPlanner(null)} />
-                  </View>
                   <View style={styles.shortcutBlock}>
-                    <Text style={[styles.shortcutLabel, nightMode && styles.nightClock]}>OR START WITH</Text>
+                    <Text style={[styles.shortcutLabel, nightMode && styles.nightClock]}>WHAT’S THE VIBE TODAY?</Text>
                     <View style={styles.shortcuts}>
                       {SHORTCUT_VIBES.map((id) => {
                         const v = VIBES.find((x) => x.id === id);
@@ -151,9 +148,21 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation, onLocate }: Props
             </View>
           )}
 
-          <Pressable onPress={onSkip} accessibilityRole="link" style={styles.skip}>
-            <Text style={[styles.skipText, nightMode && styles.nightSkipText]}>Skip to live map →</Text>
-          </Pressable>
+          {mode === "home" ? (
+            <PixelButton
+              label="Skip to live map →"
+              accessibilityLabel="Skip to live map"
+              tone="red"
+              onPress={onSkip}
+              style={styles.skipButton}
+              textStyle={styles.skipButtonText}
+            />
+          ) : (
+            // Elsewhere a red button would compete with the main action ("Plan it", "Find my walk").
+            <Pressable onPress={onSkip} accessibilityRole="link" style={[styles.skip, styles.pill]}>
+              <Text style={styles.pillText}>Skip to live map →</Text>
+            </Pressable>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -181,11 +190,10 @@ const styles = StyleSheet.create({
   gooseMessageRow: { alignSelf: "flex-start", flexDirection: "row", alignItems: "flex-end", gap: 9, width: "92%" },
   avatar: { width: 38, height: 38, alignItems: "center", justifyContent: "center", backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
   greeting: { flex: 1, gap: 5, padding: 16, backgroundColor: colors.paper },
-  ctaRow: { alignItems: "center" },
-  cta: { minWidth: 240, paddingVertical: 14 },
-  ctaText: { fontSize: 24, lineHeight: 28 },
+  skipButton: { alignSelf: "center", minWidth: 250, paddingVertical: 12 },
+  skipButtonText: { fontSize: 22, lineHeight: 26 },
   shortcutBlock: { gap: 8, alignItems: "center" },
-  shortcutLabel: { fontFamily: fonts.heading, fontSize: 11, color: colors.inkSoft, letterSpacing: 1 },
+  shortcutLabel: { fontFamily: fonts.heading, fontSize: 16, color: colors.ink, letterSpacing: 1 },
   shortcuts: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 },
   userMessageRow: { width: "100%", alignItems: "flex-end" },
   composerBubble: { width: "82%", minHeight: 96, backgroundColor: colors.gold, borderWidth: 3, borderColor: colors.ink, borderRadius: 16, borderBottomRightRadius: 3, paddingHorizontal: 10, paddingVertical: 8 },
@@ -203,8 +211,6 @@ const styles = StyleSheet.create({
   },
   sendRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   skip: { alignSelf: "center", paddingHorizontal: 14, paddingVertical: 8 },
-  skipText: { color: colors.wood, fontFamily: fonts.heading, fontSize: 17, textDecorationLine: "underline" },
-  nightSkipText: { color: "#F2C14E" },
   // Paper pill so the link stays readable over the skyline backdrop in day and night scenes.
   pill: { backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
   pillText: { color: colors.ink, fontFamily: fonts.body, fontSize: 18, textDecorationLine: "underline" },
