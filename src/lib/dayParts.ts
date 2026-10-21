@@ -7,10 +7,10 @@ export const DAY_PART_LABEL: Record<DayPart, string> = { morning: "MORNING", aft
 /** Walks at least this long are shown in parts of the day. */
 export const SPLIT_WALK_MINUTES = 360;
 
-/** Morning until noon, afternoon until 5 pm, evening after that (late night counts as evening). */
+/** Morning until noon, afternoon until 4 pm, evening after that (late night counts as evening). */
 export function dayPart(iso: string): DayPart {
   const hour = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", hour: "2-digit", hourCycle: "h23" }).format(new Date(iso)));
   if (hour >= 5 && hour < 12) return "morning";
-  if (hour >= 12 && hour < 17) return "afternoon";
+  if (hour >= 12 && hour < 16) return "afternoon";
   return "evening";
 }

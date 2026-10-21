@@ -80,7 +80,8 @@ interface GuideRequest {
   startAt?: string | null;
   freeOnly?: boolean;
   travel?: "walk" | "transit" | "flexible";
-  /** Planner spend limit in CAD for `partySize` people. */
+  /** Planner spend limit in CAD for `partySize` people; `budgetMin` is the bottom of the range (default $0). */
+  budgetMin?: number | null;
   budgetLimit?: number | null;
   partySize?: number;
 }
@@ -394,7 +395,7 @@ Deno.serve(async (req) => {
   const travel = body.travel === "walk" || body.travel === "transit" ? body.travel : "flexible";
   const allowTransit = travel !== "walk";
   // The planner's budget buttons win; otherwise a budget typed in the message ("under $50") is just as binding.
-  const spend = parseBudget(body.budgetLimit, body.partySize) ?? statedBudget(prompt);
+  const spend = parseBudget(body.budgetLimit, body.partySize, body.budgetMin) ?? statedBudget(prompt);
   const perPersonLimit = spend ? spend.limit / spend.people : null;
 
   // Untrusted input: anything that isn't a list of {role, text} objects is ignored rather than crashing the request.
@@ -522,19 +523,16 @@ Deno.serve(async (req) => {
               if (spend) {
                 const check = checkBudget(
                   walk.stops.map((s) => known.get(s.id)!).map((item) => ({ ...item, name: item.kind === "event" ? item.title : item.name })),
-                  spend.limit,
-                  spend.people,
+                  spend,
                 );
                 if (!check.fits) {
-                  const why = check.unknown.length
-                    ? `These stops have no listed price, so they can't be counted against the budget: ${check.unknown.join("; ")}.`
-                    : `The listed prices add up to $${check.total} for ${spend.people === 1 ? "one person" : `${spend.people} people`}, over the $${spend.limit} limit.`;
-                  return {
-                    type: "tool_result",
-                    tool_use_id: tool.id,
-                    content: `${why} Swap the priciest stop for a free or cheaper one from your searches, or drop it and present a shorter walk.`,
-                    is_error: true,
-                  };
+                  const who = spend.people === 1 ? "one person" : `${spend.people} people`;
+                  const content = check.unknown.length
+                    ? `These stops have no listed price, so they can't be counted against the budget: ${check.unknown.join("; ")}. Swap them for priced or free stops from your searches.`
+                    : check.outside === "over"
+                      ? `The listed prices can reach $${check.total} for ${who}, over the $${spend.limit} maximum. Swap the priciest stop for a cheaper or free one from your searches, or drop it and present a shorter walk.`
+                      : `The listed prices only come to about $${check.totalLow} for ${who}, below the $${spend.min} minimum they asked for. Swap a free stop for a nicer paid one that keeps the total under $${spend.limit}.`;
+                  return { type: "tool_result", tool_use_id: tool.id, content, is_error: true };
                 }
               }
               const candidateStops = await buildStops(walk.stops.slice(0, 8), known, origin, start, placesKey, allowTransit);

@@ -29,7 +29,7 @@ test("no wait when the stop is already late enough, the time is unreadable, or t
 });
 
 test("parts of the day, the same on the server and the walk card", () => {
-  const cases: Array<[string, string]> = [["10:00", "morning"], ["11:59", "morning"], ["12:00", "afternoon"], ["16:59", "afternoon"], ["17:00", "evening"], ["23:30", "evening"], ["01:00", "evening"]];
+  const cases: Array<[string, string]> = [["10:00", "morning"], ["11:59", "morning"], ["12:00", "afternoon"], ["15:59", "afternoon"], ["16:00", "evening"], ["23:30", "evening"], ["01:00", "evening"]];
   for (const [local, part] of cases) {
     assert.equal(dayPart(at(local)), part, local);
     assert.equal(cardDayPart(at(local).toISOString()), part, `card ${local}`);

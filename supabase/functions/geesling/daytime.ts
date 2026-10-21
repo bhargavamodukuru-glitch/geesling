@@ -13,11 +13,11 @@ function torontoParts(d: Date) {
   return { year: get("year"), month: get("month") - 1, day: get("day"), hour: get("hour"), minute: get("minute") };
 }
 
-/** Morning until noon, afternoon until 5 pm, evening after that (late night counts as evening). */
+/** Morning until noon, afternoon until 4 pm, evening after that (late night counts as evening). */
 export function dayPart(d: Date): DayPart {
   const { hour } = torontoParts(d);
   if (hour >= 5 && hour < 12) return "morning";
-  if (hour >= 12 && hour < 17) return "afternoon";
+  if (hour >= 12 && hour < 16) return "afternoon";
   return "evening";
 }
 
