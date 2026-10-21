@@ -6,6 +6,7 @@ import { Goose } from "@/components/Goose";
 import { Header } from "@/components/Header";
 import { ItemSheet } from "@/components/ItemSheet";
 import { CityMap } from "@/components/map/CityMap";
+import { RouteKey } from "@/components/map/RouteKey";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { SetupNotice } from "@/components/SetupNotice";
 import { WalkCard } from "@/components/WalkCard";
@@ -71,6 +72,7 @@ function SharedWalk() {
             onSelect={(item) => setSelected(item ? { item, note: walk.stops.find((s) => s.item.id === item.id)?.why ?? null } : null)}
             onBoundsChange={() => undefined}
           />
+          <RouteKey walk={walk} style={{ top: 10 }} />
           {selected ? (
             <View style={styles.sheetWrap} pointerEvents="box-none">
               <ItemSheet item={selected.item} note={selected.note} onClose={() => setSelected(null)} maxHeight={mapHeight} />

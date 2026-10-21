@@ -6,6 +6,7 @@ import { GeeslingWelcome } from "@/components/GeeslingWelcome";
 import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { ItemSheet } from "@/components/ItemSheet";
 import { CityMap } from "@/components/map/CityMap";
+import { RouteKey } from "@/components/map/RouteKey";
 import { GeeslingPanel } from "@/components/panels/GeeslingPanel";
 import { HappeningPanel } from "@/components/panels/HappeningPanel";
 import { SavedPanel } from "@/components/panels/SavedPanel";
@@ -188,6 +189,7 @@ function Home() {
           <PixelButton label="Clear walk" small onPress={clearWalk} />
         </View>
       ) : null}
+      {walk ? <RouteKey walk={walk} /> : null}
       {entered && !walk && bounds && !isViewInToronto(bounds) ? (
         <View style={styles.walkBanner} accessibilityLiveRegion="polite">
           <Text style={styles.noteText}>{OUT_OF_AREA_MESSAGE}</Text>

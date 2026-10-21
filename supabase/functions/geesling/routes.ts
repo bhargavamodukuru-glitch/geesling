@@ -6,6 +6,28 @@ export interface LatLng {
   lng: number;
 }
 
+export interface TransitStop {
+  name: string;
+  lat: number;
+  lng: number;
+}
+
+/** One part of a TTC leg: the walk to a stop, a ride, a transfer walk, or the walk from the last stop. */
+export interface LegSegment {
+  mode: "walk" | "transit";
+  duration_s: number;
+  distance_m: number;
+  /** Google encoded polylines, one per step, drawn in order. */
+  polylines: string[];
+  /** Ride details; only on transit segments. */
+  line?: string;
+  headsign?: string | null;
+  stop_count?: number | null;
+  board?: TransitStop | null;
+  alight?: TransitStop | null;
+  departs_at?: string | null;
+}
+
 export interface Leg {
   mode: "walk" | "transit";
   duration_s: number;
@@ -13,6 +35,8 @@ export interface Leg {
   polyline: string | null; // Google encoded polyline
   transit_lines: string[]; // e.g. ["504 King", "Line 1"]
   estimated: boolean; // true when computed without the Routes API
+  /** For TTC legs: where to walk, board and get off. Missing on legs saved before it was added. */
+  segments?: LegSegment[];
 }
 
 const TRANSIT_THRESHOLD_M = 1800;
@@ -67,13 +91,70 @@ interface RoutesResponse {
     duration?: string; // "1234s"
     distanceMeters?: number;
     polyline?: { encodedPolyline?: string };
-    legs?: Array<{
-      steps?: Array<{
-        travelMode?: string;
-        transitDetails?: { transitLine?: { nameShort?: string; name?: string; vehicle?: { type?: string } } };
-      }>;
-    }>;
+    legs?: Array<{ steps?: RouteStep[] }>;
   }>;
+}
+
+interface GoogleStop {
+  name?: string;
+  location?: { latLng?: { latitude?: number; longitude?: number } };
+}
+
+export interface RouteStep {
+  travelMode?: string;
+  staticDuration?: string; // "123s"
+  distanceMeters?: number;
+  polyline?: { encodedPolyline?: string };
+  transitDetails?: {
+    transitLine?: { nameShort?: string; name?: string; vehicle?: { type?: string } };
+    headsign?: string;
+    stopCount?: number;
+    stopDetails?: { departureStop?: GoogleStop; arrivalStop?: GoogleStop; departureTime?: string };
+  };
+}
+
+function toStop(stop: GoogleStop | undefined): TransitStop | null {
+  const ll = stop?.location?.latLng;
+  if (!stop?.name || typeof ll?.latitude !== "number" || typeof ll.longitude !== "number") return null;
+  return { name: stop.name, lat: ll.latitude, lng: ll.longitude };
+}
+
+/**
+ * Groups a transit route's steps into segments: consecutive walking steps become one walk,
+ * and each ride is its own segment with the stop to board at, the stop to get off at and the direction.
+ */
+export function transitSegments(steps: RouteStep[]): LegSegment[] {
+  const segments: LegSegment[] = [];
+  for (const step of steps) {
+    const seconds = Number((step.staticDuration ?? "0s").replace("s", "")) || 0;
+    const polyline = step.polyline?.encodedPolyline;
+    const details = step.transitDetails;
+    if (step.travelMode === "TRANSIT" && details) {
+      const line = details.transitLine;
+      segments.push({
+        mode: "transit",
+        duration_s: seconds,
+        distance_m: step.distanceMeters ?? 0,
+        polylines: polyline ? [polyline] : [],
+        line: line?.nameShort || line?.name || "TTC",
+        headsign: details.headsign ?? null,
+        stop_count: details.stopCount ?? null,
+        board: toStop(details.stopDetails?.departureStop),
+        alight: toStop(details.stopDetails?.arrivalStop),
+        departs_at: details.stopDetails?.departureTime ?? null,
+      });
+      continue;
+    }
+    const last = segments[segments.length - 1];
+    if (last?.mode === "walk") {
+      last.duration_s += seconds;
+      last.distance_m += step.distanceMeters ?? 0;
+      if (polyline) last.polylines.push(polyline);
+    } else {
+      segments.push({ mode: "walk", duration_s: seconds, distance_m: step.distanceMeters ?? 0, polylines: polyline ? [polyline] : [] });
+    }
+  }
+  return segments;
 }
 
 async function computeRoute(apiKey: string, from: LatLng, to: LatLng, mode: "WALK" | "TRANSIT", departAt: Date): Promise<Leg | null> {
@@ -87,7 +168,7 @@ async function computeRoute(apiKey: string, from: LatLng, to: LatLng, mode: "WAL
   if (mode === "TRANSIT" && departAt.getTime() > Date.now()) body.departureTime = departAt.toISOString();
   const fieldMask =
     mode === "TRANSIT"
-      ? "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.travelMode,routes.legs.steps.transitDetails.transitLine"
+      ? "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.distanceMeters,routes.legs.steps.polyline.encodedPolyline,routes.legs.steps.transitDetails"
       : "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline";
   const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
     method: "POST",
@@ -101,11 +182,13 @@ async function computeRoute(apiKey: string, from: LatLng, to: LatLng, mode: "WAL
   const data = (await response.json()) as RoutesResponse;
   const route = data.routes?.[0];
   if (!route?.duration) return null;
+  const steps = route.legs?.flatMap((l) => l.steps ?? []) ?? [];
   const lines = new Set<string>();
-  for (const step of route.legs?.flatMap((l) => l.steps ?? []) ?? []) {
+  for (const step of steps) {
     const line = step.transitDetails?.transitLine;
     if (step.travelMode === "TRANSIT" && line) lines.add(line.nameShort || line.name || "TTC");
   }
+  const segments = mode === "TRANSIT" ? transitSegments(steps) : [];
   return {
     mode: mode === "TRANSIT" ? "transit" : "walk",
     duration_s: Number(route.duration.replace("s", "")),
@@ -113,6 +196,7 @@ async function computeRoute(apiKey: string, from: LatLng, to: LatLng, mode: "WAL
     polyline: route.polyline?.encodedPolyline ?? null,
     transit_lines: [...lines],
     estimated: false,
+    ...(segments.length ? { segments } : {}),
   };
 }
 

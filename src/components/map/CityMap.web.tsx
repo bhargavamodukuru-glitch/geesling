@@ -8,7 +8,8 @@ import { Goose } from "@/components/Goose";
 import { MapPin } from "@/components/MapPin";
 import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
-import { colors, text } from "@/lib/theme";
+import { colors, fonts, text } from "@/lib/theme";
+import { routeDrawing } from "@/lib/transit";
 import type { MapItem } from "@/lib/types";
 import { OUTSIDE_MASK_OUTER, PAN_BOUNDS, TORONTO_RING } from "@/lib/area";
 import { TORONTO, walkFocusBounds, type CityMapProps } from "./types";
@@ -79,17 +80,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
     const stopItems = walk?.stops.map((s) => s.item) ?? [];
     return [...stopItems, ...items.filter((i) => !walkIds.has(i.id)), ...(walk ? [] : PHOTO_SPOTS)];
   }, [items, walk, walkIds]);
-  const legs = useMemo(
-    () =>
-      (walk?.stops ?? [])
-        .filter((s) => s.leg?.polyline)
-        .map((s) => ({
-          key: `leg-${s.order}`,
-          path: decodePolyline(s.leg!.polyline!).map((p) => ({ lat: p.latitude, lng: p.longitude })),
-          transit: s.leg!.mode === "transit",
-        })),
-    [walk],
-  );
+  const route = useMemo(() => routeDrawing(walk, decodePolyline), [walk]);
 
   if (!API_KEY) {
     return (
@@ -129,19 +120,26 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
       >
         <CityLimit />
         <CameraController walk={walk} userLocation={userLocation} focusKey={focusKey} />
-        {legs.map((leg) => (
+        {route.lines.map((line) => (
           <Polyline
-            key={leg.key}
-            path={leg.path}
-            strokeColor={leg.transit ? colors.accent : colors.woodDark}
+            key={line.key}
+            path={line.points.map((p) => ({ lat: p.latitude, lng: p.longitude }))}
+            strokeColor={line.transit ? colors.accent : colors.woodDark}
             strokeWeight={5}
-            strokeOpacity={leg.transit ? 0.95 : 0}
+            strokeOpacity={line.transit ? 0.95 : 0}
             icons={
-              leg.transit
+              line.transit
                 ? []
                 : [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: colors.woodDark, scale: 4 }, offset: "0", repeat: "16px" }]
             }
           />
+        ))}
+        {route.labels.map((label) => (
+          <AdvancedMarker key={label.key} position={{ lat: label.point.latitude, lng: label.point.longitude }} zIndex={1500}>
+            <View style={[styles.chip, label.kind === "alight" && styles.chipAlight]}>
+              <Text style={[styles.chipText, label.kind === "alight" && styles.chipAlightText]}>{label.text}</Text>
+            </View>
+          </AdvancedMarker>
         ))}
         {userLocation ? (
           <AdvancedMarker position={userLocation} zIndex={2000}>
@@ -167,5 +165,9 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
 const styles = StyleSheet.create({
   missing: { backgroundColor: colors.grass, alignItems: "center", justifyContent: "center", padding: 16 },
   missingPanel: { maxWidth: 360, alignItems: "center", gap: 8 },
+  chip: { backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 5, paddingVertical: 1 },
+  chipText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 16, color: colors.white },
+  chipAlight: { backgroundColor: colors.paper },
+  chipAlightText: { color: colors.accent },
   me: { width: 16, height: 16, backgroundColor: "#2F80ED", borderWidth: 3, borderColor: colors.white },
 });

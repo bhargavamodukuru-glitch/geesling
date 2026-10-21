@@ -1,12 +1,13 @@
 // Native map: Apple Maps on iOS, Google Maps on Android (react-native-maps).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Platform, StyleSheet } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polygon, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from "react-native-maps";
 import { MapPin } from "@/components/MapPin";
 import { OUTSIDE_MASK_OUTER, PAN_BOUNDS, TORONTO_RING, clampToPanArea } from "@/lib/area";
 import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
-import { colors } from "@/lib/theme";
+import { colors, fonts } from "@/lib/theme";
+import { routeDrawing } from "@/lib/transit";
 import type { MapItem } from "@/lib/types";
 import { STARDEW_MAP_STYLE } from "./mapStyle";
 import { DEFAULT_DELTA, TORONTO, walkFocusBounds, type CityMapProps } from "./types";
@@ -98,13 +99,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
     return () => clearTimeout(timer);
   }, [pins]);
 
-  const legs = useMemo(
-    () =>
-      (walk?.stops ?? [])
-        .filter((s) => s.leg?.polyline)
-        .map((s) => ({ key: `leg-${s.order}`, coords: decodePolyline(s.leg!.polyline!), transit: s.leg!.mode === "transit" })),
-    [walk],
-  );
+  const route = useMemo(() => routeDrawing(walk, decodePolyline), [walk]);
 
   return (
     <MapView
@@ -123,14 +118,21 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
         if (e.nativeEvent.action !== "marker-press") onSelect(null);
       }}
     >
-      {legs.map((leg) => (
+      {route.lines.map((line) => (
         <Polyline
-          key={leg.key}
-          coordinates={leg.coords}
-          strokeColor={leg.transit ? colors.accent : colors.woodDark}
+          key={line.key}
+          coordinates={line.points}
+          strokeColor={line.transit ? colors.accent : colors.woodDark}
           strokeWidth={5}
-          lineDashPattern={leg.transit ? undefined : [10, 8]}
+          lineDashPattern={line.transit ? undefined : [10, 8]}
         />
+      ))}
+      {route.labels.map((label) => (
+        <Marker key={label.key} coordinate={label.point} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={tracking} zIndex={1500}>
+          <View style={[styles.chip, label.kind === "alight" && styles.chipAlight]}>
+            <Text style={[styles.chipText, label.kind === "alight" && styles.chipAlightText]}>{label.text}</Text>
+          </View>
+        </Marker>
       ))}
       {pins.map((item) => (
         <Marker
@@ -153,3 +155,10 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
     </MapView>
   );
 }
+
+const styles = StyleSheet.create({
+  chip: { backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 5, paddingVertical: 1 },
+  chipText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 16, color: colors.white },
+  chipAlight: { backgroundColor: colors.paper },
+  chipAlightText: { color: colors.accent },
+});

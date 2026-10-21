@@ -7,6 +7,7 @@ import { openWalkInMaps, shareWalk } from "@/lib/links";
 import { DAY_PART_LABEL, SPLIT_WALK_MINUTES, dayPart } from "@/lib/dayParts";
 import { costLine, formatDuration, summarizePlan, travelLine } from "@/lib/planSummary";
 import { isTopRated } from "@/lib/placeBadges";
+import { transitLabel, transitSteps } from "@/lib/transit";
 import { colors, fonts, text } from "@/lib/theme";
 import { itemTitle, type MapItem, type Walk } from "@/lib/types";
 
@@ -50,10 +51,18 @@ export function WalkCard({ walk, onShowOnMap, onSelectStop }: Props) {
             {newPart ? <Text style={styles.part}>{DAY_PART_LABEL[part]}</Text> : null}
             {stop.leg ? (
               <Text style={styles.leg}>
-                {stop.leg.mode === "transit" ? `🚋 TTC ${stop.leg.transit_lines.join(" → ")}` : "🦶 Walk"} {minutes(stop.leg.duration_s)} · {distance(stop.leg.distance_m)}
+                {stop.leg.mode === "transit" ? `TTC: ${stop.leg.transit_lines.map(transitLabel).join(" → ") || "🚌 transit"}` : "🦶 Walk"} {minutes(stop.leg.duration_s)} · {distance(stop.leg.distance_m)}
                 {stop.leg.estimated ? " (approx.)" : ""}
               </Text>
             ) : null}
+            {/* Where to walk, board and get off, when the guide saved the ride's stops. */}
+            {stop.leg?.mode === "transit"
+              ? transitSteps(stop.leg).map((step, n) => (
+                  <Text key={n} style={styles.transitStep}>
+                    {step}
+                  </Text>
+                ))
+              : null}
             {freeMinutes >= 15 ? <Text style={styles.leg}>☕ Free time {formatDuration(freeMinutes)}</Text> : null}
             <Pressable
               onPress={() => onSelectStop?.(stop.item, stop.why)}
@@ -106,6 +115,7 @@ const styles = StyleSheet.create({
   card: { gap: 6 },
   title: { fontFamily: fonts.heading, fontSize: 18, color: colors.accent },
   part: { fontFamily: fonts.heading, fontSize: 13, color: colors.accent, marginTop: 6, letterSpacing: 1 },
+  transitStep: { fontFamily: fonts.body, fontSize: 16, lineHeight: 18, color: colors.inkSoft, marginLeft: 48, marginBottom: 2 },
   leg: { fontFamily: fonts.body, fontSize: 17, color: colors.wood, marginLeft: 36, marginVertical: 2 },
   stop: { flexDirection: "row", gap: 8, alignItems: "flex-start", backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, padding: 6 },
   badge: { width: 26, height: 26, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },

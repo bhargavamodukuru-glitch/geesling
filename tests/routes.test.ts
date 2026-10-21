@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { bestLeg } from "../supabase/functions/geesling/routes.ts";
+import { bestLeg, transitSegments } from "../supabase/functions/geesling/routes.ts";
 
 const FROM = { lat: 43.6709, lng: -79.3939 };
 const TO = { lat: 43.6487, lng: -79.3854 };
@@ -69,4 +69,41 @@ test("without a routing key the leg is an honest estimate on foot", async () => 
   assert.equal(leg.mode, "walk");
   assert.equal(leg.estimated, true);
   assert.deepEqual(calls, []);
+});
+
+test("a transit route's steps become a walk to the stop, the ride, and the walk after", () => {
+  const segments = transitSegments([
+    { travelMode: "WALK", staticDuration: "200s", distanceMeters: 250, polyline: { encodedPolyline: "a" } },
+    { travelMode: "WALK", staticDuration: "160s", distanceMeters: 200, polyline: { encodedPolyline: "b" } },
+    {
+      travelMode: "TRANSIT",
+      staticDuration: "600s",
+      distanceMeters: 1900,
+      polyline: { encodedPolyline: "c" },
+      transitDetails: {
+        transitLine: { nameShort: "506" },
+        headsign: "Main Street Station",
+        stopCount: 5,
+        stopDetails: {
+          departureStop: { name: "College St at Bay St", location: { latLng: { latitude: 43.66, longitude: -79.386 } } },
+          arrivalStop: { name: "College St at Spadina Ave", location: { latLng: { latitude: 43.658, longitude: -79.4 } } },
+          departureTime: "2026-10-21T16:05:00Z",
+        },
+      },
+    },
+    { travelMode: "WALK", staticDuration: "180s", distanceMeters: 200, polyline: { encodedPolyline: "d" } },
+  ]);
+  assert.equal(segments.length, 3);
+  assert.deepEqual(segments[0], { mode: "walk", duration_s: 360, distance_m: 450, polylines: ["a", "b"] }, "consecutive walking steps merge");
+  assert.equal(segments[1].line, "506");
+  assert.equal(segments[1].board?.name, "College St at Bay St");
+  assert.equal(segments[1].alight?.name, "College St at Spadina Ave");
+  assert.equal(segments[1].stop_count, 5);
+  assert.equal(segments[2].mode, "walk");
+});
+
+test("a ride with missing stop details still keeps the line", () => {
+  const [ride] = transitSegments([{ travelMode: "TRANSIT", staticDuration: "300s", transitDetails: { transitLine: { name: "Line 1 Yonge-University" } } }]);
+  assert.equal(ride.line, "Line 1 Yonge-University");
+  assert.equal(ride.board, null);
 });

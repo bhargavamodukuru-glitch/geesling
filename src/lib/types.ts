@@ -55,6 +55,26 @@ export interface PlaceItem {
 
 export type MapItem = EventItem | PlaceItem;
 
+export interface TransitStop {
+  name: string;
+  lat: number;
+  lng: number;
+}
+
+/** Part of a TTC leg (same shape as the guide's LegSegment in supabase/functions/geesling/routes.ts). */
+export interface LegSegment {
+  mode: "walk" | "transit";
+  duration_s: number;
+  distance_m: number;
+  polylines: string[];
+  line?: string;
+  headsign?: string | null;
+  stop_count?: number | null;
+  board?: TransitStop | null;
+  alight?: TransitStop | null;
+  departs_at?: string | null;
+}
+
 export interface Leg {
   mode: "walk" | "transit";
   duration_s: number;
@@ -62,6 +82,8 @@ export interface Leg {
   polyline: string | null;
   transit_lines: string[];
   estimated: boolean;
+  /** Where to walk, board and get off on a TTC leg. Missing on walks saved before it was added. */
+  segments?: LegSegment[];
 }
 
 export interface WalkStop {
