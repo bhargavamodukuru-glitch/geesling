@@ -4,6 +4,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.135.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 import { checkBudget, fitsPerPerson, parseBudget } from "./budget.ts";
+import { leavesTooMuchTime } from "./fill.ts";
 import { contextBlock, MODEL, SYSTEM_PROMPT, TOOLS } from "./prompt.ts";
 import { type MaxPrice, type PlaceItem, searchPlaces } from "./places.ts";
 import { bestLeg, type Leg } from "./routes.ts";
@@ -388,6 +389,7 @@ Deno.serve(async (req) => {
   let finalText = "";
   let presented: PresentWalkInput | null = null;
   let validatedStops: WalkStop[] | null = null;
+  let askedToFill = false;
 
   try {
     for (let turn = 0; turn < MAX_TURNS && !presented; turn++) {
@@ -496,6 +498,17 @@ Deno.serve(async (req) => {
                   type: "tool_result",
                   tool_use_id: tool.id,
                   content: `This route exceeds the 20-minute travel limit between stops: ${details}. Keep the requested anchor and order, then search for a nearby replacement within 800–1200 m of the preceding stop. Prefer highly rated places with substantial review counts. If no suitable nearby replacement exists, omit that stop and present a shorter walk.`,
+                  is_error: true,
+                };
+              }
+              const lastLeave = candidateStops.length ? Date.parse(candidateStops[candidateStops.length - 1].leave_at) : start.getTime();
+              const walkMinutes = Math.round((lastLeave - start.getTime()) / 60_000);
+              if (!askedToFill && leavesTooMuchTime(walkMinutes, budget, candidateStops.length)) {
+                askedToFill = true; // only once, so a thin area still gets a walk
+                return {
+                  type: "tool_result",
+                  tool_use_id: tool.id,
+                  content: `This walk only fills about ${walkMinutes} of the ${budget} minutes. Add free stops near these ones (park, waterfront, plaza, library, garden, viewpoint, free gallery) with search_places, then present again. If nothing suitable is nearby, present the same stops again and say plainly in the intro that it's a shorter outing. Keep the intro to the stops in the walk.`,
                   is_error: true,
                 };
               }
