@@ -6,6 +6,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Panel } from "@/components/Pixel";
 import { Goose } from "@/components/Goose";
 import { MapPin } from "@/components/MapPin";
+import { logMapLoad } from "@/lib/api";
 import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
 import { colors, fonts, text } from "@/lib/theme";
@@ -58,6 +59,15 @@ function CityLimit() {
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 // Advanced markers need a Map ID. Create one with the Stardew style from mapStyle.ts in Google Cloud.
 const MAP_ID = process.env.EXPO_PUBLIC_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID";
+
+/** Google bills one Dynamic Maps event per map created; counts it once per map for the Costs tab. */
+function MapLoadCounter() {
+  const map = useMap();
+  useEffect(() => {
+    if (map) logMapLoad();
+  }, [map]);
+  return null;
+}
 
 function CameraController({ walk, userLocation, focusKey }: Pick<CityMapProps, "walk" | "userLocation" | "focusKey">) {
   const map = useMap();
@@ -118,6 +128,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
           onBoundsChange({ minLat: b.south, maxLat: b.north, minLng: b.west, maxLng: b.east });
         }}
       >
+        <MapLoadCounter />
         <CityLimit />
         <CameraController walk={walk} userLocation={userLocation} focusKey={focusKey} />
         {route.lines.map((line) => (

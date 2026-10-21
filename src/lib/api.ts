@@ -127,3 +127,10 @@ export async function sendFeedback(input: { rating: FeedbackRating | null; messa
     throw new Error(error.code === "42501" ? "That's a lot of feedback in one hour, thank you! Try again a bit later." : "Couldn't send that just now. Try again?");
   }
 }
+
+/** Counts one Google "Dynamic Maps" load for the Costs tab. Fire and forget: a failed count never affects the map. */
+export function logMapLoad(): void {
+  void supabase.rpc("log_map_load").then(({ error }) => {
+    if (error) console.warn("map load not counted", error.message);
+  });
+}

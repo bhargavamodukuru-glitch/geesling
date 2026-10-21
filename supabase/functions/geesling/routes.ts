@@ -157,7 +157,10 @@ export function transitSegments(steps: RouteStep[]): LegSegment[] {
   return segments;
 }
 
-async function computeRoute(apiKey: string, from: LatLng, to: LatLng, mode: "WALK" | "TRANSIT", departAt: Date): Promise<Leg | null> {
+/** Called once per Routes API request, so the guide can count billable calls. */
+export type RouteMeter = (mode: "walk" | "transit") => void;
+
+async function computeRoute(apiKey: string, from: LatLng, to: LatLng, mode: "WALK" | "TRANSIT", departAt: Date, meter?: RouteMeter): Promise<Leg | null> {
   const body: Record<string, unknown> = {
     origin: { location: { latLng: { latitude: from.lat, longitude: from.lng } } },
     destination: { location: { latLng: { latitude: to.lat, longitude: to.lng } } },
@@ -170,6 +173,7 @@ async function computeRoute(apiKey: string, from: LatLng, to: LatLng, mode: "WAL
     mode === "TRANSIT"
       ? "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.distanceMeters,routes.legs.steps.polyline.encodedPolyline,routes.legs.steps.transitDetails"
       : "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline";
+  meter?.(mode === "TRANSIT" ? "transit" : "walk");
   const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": fieldMask },
@@ -204,11 +208,11 @@ async function computeRoute(apiKey: string, from: LatLng, to: LatLng, mode: "WAL
  * Best way between two stops: walk, or TTC when the hop is long and transit is meaningfully faster.
  * `allowTransit: false` is the "I'm walking" choice: the leg is always a walk, however long it is.
  */
-export async function bestLeg(apiKey: string | null, from: LatLng, to: LatLng, departAt: Date, allowTransit = true): Promise<Leg> {
+export async function bestLeg(apiKey: string | null, from: LatLng, to: LatLng, departAt: Date, allowTransit = true, meter?: RouteMeter): Promise<Leg> {
   if (!apiKey) return estimateLeg(from, to);
-  const walk = (await computeRoute(apiKey, from, to, "WALK", departAt)) ?? estimateLeg(from, to);
+  const walk = (await computeRoute(apiKey, from, to, "WALK", departAt, meter)) ?? estimateLeg(from, to);
   if (!allowTransit || walk.distance_m <= TRANSIT_THRESHOLD_M) return walk;
-  const transit = await computeRoute(apiKey, from, to, "TRANSIT", departAt);
+  const transit = await computeRoute(apiKey, from, to, "TRANSIT", departAt, meter);
   if (transit && transit.transit_lines.length > 0 && transit.duration_s < walk.duration_s * 0.8) return transit;
   return walk;
 }

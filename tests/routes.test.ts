@@ -107,3 +107,14 @@ test("a ride with missing stop details still keeps the line", () => {
   assert.equal(ride.line, "Line 1 Yonge-University");
   assert.equal(ride.board, null);
 });
+
+test("every Routes request is counted, by mode, so the Costs tab can track the free allowance", async () => {
+  mockRoutes();
+  const counted: string[] = [];
+  await bestLeg("key", FROM, TO, DEPART, true, (mode) => counted.push(mode));
+  assert.deepEqual(counted, ["walk", "transit"]);
+  const short: string[] = [];
+  mockRoutes({ walkMeters: 900 });
+  await bestLeg("key", FROM, TO, DEPART, true, (mode) => short.push(mode));
+  assert.deepEqual(short, ["walk"], "a short hop makes one request");
+});

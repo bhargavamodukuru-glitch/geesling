@@ -9,7 +9,7 @@ import { dayPartMinutes, relativeDay, requestedStart, torontoDay } from "./when.
 import { leavesTooMuchTime, minutesLeftTonight, statedDuration } from "./fill.ts";
 import { contextBlock, MODEL, SYSTEM_PROMPT, TOOLS } from "./prompt.ts";
 import { type MaxPrice, type PlaceItem, searchPlaces } from "./places.ts";
-import { bestLeg, type Leg } from "./routes.ts";
+import { bestLeg, type Leg, type RouteMeter } from "./routes.ts";
 
 const DOWNTOWN = { lat: 43.6532, lng: -79.3832 };
 const MAX_TURNS = 8;
@@ -288,13 +288,14 @@ async function buildStops(
   start: Date,
   routesKey: string | null,
   allowTransit: boolean,
+  meter?: RouteMeter,
 ): Promise<WalkStop[]> {
   const stops: WalkStop[] = [];
   let cursor = start;
   let previous: { lat: number; lng: number } | null = origin;
   for (const [index, stop] of chosen.entries()) {
     const item = known.get(stop.id)!;
-    const leg = previous ? await bestLeg(routesKey, previous, item, cursor, allowTransit) : null;
+    const leg = previous ? await bestLeg(routesKey, previous, item, cursor, allowTransit, meter) : null;
     // A stop can ask not to start before a set time (dinner from 17:30); the walk waits until then.
     let arrive = notBefore(new Date(cursor.getTime() + (leg?.duration_s ?? 0) * 1000), stop.arrive_after);
     let stay = Math.max(10, Math.min(stop.stay_minutes, 240));
@@ -337,7 +338,45 @@ async function rateLimited(db: SupabaseClient, owner: string): Promise<"hour" | 
   return null;
 }
 
+/** Counts this request's billable calls; written to api_usage when the request ends, whatever the outcome. */
+class Meter {
+  placesSearches = 0;
+  routes = { walk: 0, transit: 0 };
+  claude = new Map<string, number>();
+  route: RouteMeter = (mode) => {
+    this.routes[mode] += 1;
+  };
+  tokens(model: string, usage: Anthropic.Beta.BetaUsage) {
+    const add = (kind: string, n: number | null | undefined) => {
+      if (n) this.claude.set(`${model}:${kind}`, (this.claude.get(`${model}:${kind}`) ?? 0) + n);
+    };
+    add("input", usage.input_tokens);
+    add("output", usage.output_tokens);
+    add("cache_read", usage.cache_read_input_tokens);
+    add("cache_write", usage.cache_creation_input_tokens);
+  }
+  rows() {
+    const rows = [{ service: "supabase_functions", sku: "geesling", units: 1 }];
+    if (this.placesSearches) rows.push({ service: "google_places", sku: "text_search_enterprise_atmosphere", units: this.placesSearches });
+    if (this.routes.walk) rows.push({ service: "google_routes", sku: "compute_routes:walk", units: this.routes.walk });
+    if (this.routes.transit) rows.push({ service: "google_routes", sku: "compute_routes:transit", units: this.routes.transit });
+    for (const [sku, units] of this.claude) rows.push({ service: "anthropic", sku, units });
+    return rows;
+  }
+}
+
 Deno.serve(async (req) => {
+  const meter = new Meter();
+  try {
+    return await handle(req, meter);
+  } finally {
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    const { error } = await db.from("api_usage").insert(meter.rows());
+    if (error) console.error("usage metering failed", error.message);
+  }
+});
+
+async function handle(req: Request, meter: Meter): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -457,6 +496,7 @@ Deno.serve(async (req) => {
         return json({ message: "Honk… that's not something I can help with. Ask me about food, music, art or a walk around the city!", walk: null });
       }
 
+      meter.tokens(response.model, response.usage);
       const texts = response.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text").map((b) => b.text);
       if (texts.length) finalText = texts.join("\n").trim();
 
@@ -489,6 +529,7 @@ Deno.serve(async (req) => {
               if (!placesKey) return { type: "tool_result", tool_use_id: tool.id, content: "Place search is unavailable right now; build the walk from events.", is_error: true };
               const query = typeof input.query === "string" ? input.query : "";
               if (!query.trim()) return { type: "tool_result", tool_use_id: tool.id, content: "query is required", is_error: true };
+              meter.placesSearches += 1;
               const places = await searchPlaces(placesKey, {
                 query,
                 near: isLatLng(input.near) ? input.near : searchOrigin,
@@ -535,7 +576,7 @@ Deno.serve(async (req) => {
                   return { type: "tool_result", tool_use_id: tool.id, content, is_error: true };
                 }
               }
-              const candidateStops = await buildStops(walk.stops.slice(0, 8), known, origin, start, placesKey, allowTransit);
+              const candidateStops = await buildStops(walk.stops.slice(0, 8), known, origin, start, placesKey, allowTransit, meter.route);
               // Moving on to a new part of the day (or to a timed meal) may take longer than a hop within one area.
               const longHops = candidateStops.slice(1).filter((stop, i) => {
                 const prev = candidateStops[i];
@@ -615,7 +656,7 @@ Deno.serve(async (req) => {
   }
 
   const chosen = (presented as PresentWalkInput).stops.slice(0, 8);
-  const stops = validatedStops ?? await buildStops(chosen, known, origin, start, placesKey, allowTransit);
+  const stops = validatedStops ?? await buildStops(chosen, known, origin, start, placesKey, allowTransit, meter.route);
   // Google review content is transient evidence for ranking; keep only the
   // permanent place ID and derived recommendation in the stored walk.
   const safeStops = stops.map((stop) => {
@@ -643,4 +684,4 @@ Deno.serve(async (req) => {
   if (saveError) console.error("walk save failed", saveError.message);
 
   return json({ message: walk.intro, walk });
-});
+}
