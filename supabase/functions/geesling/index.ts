@@ -254,31 +254,6 @@ async function runSearchEvents(db: SupabaseClient, input: Record<string, unknown
   }));
 }
 
-async function cachePlaces(db: SupabaseClient, places: PlaceItem[]): Promise<void> {
-  if (places.length === 0) return;
-  const rows = places.map((p) => ({
-    id: p.id,
-    name: p.name,
-    primary_type: p.primary_type,
-    types: p.types,
-    address: p.address,
-    lat: p.lat,
-    lng: p.lng,
-    price_level: p.price_level,
-    is_free: p.is_free,
-    involves_alcohol: p.involves_alcohol,
-    rating: p.rating,
-    rating_count: p.rating_count,
-    website: p.website,
-    maps_url: p.maps_url,
-    summary: p.summary,
-    opening_hours: p.hours ? { weekday: p.hours } : null,
-    fetched_at: new Date().toISOString(),
-  }));
-  const { error } = await db.from("places").upsert(rows);
-  if (error) console.error("place cache failed", error.message);
-}
-
 /** Lays the chosen stops onto a timeline and routes between them. */
 async function buildStops(
   chosen: PresentWalkInput["stops"],
@@ -459,8 +434,7 @@ Deno.serve(async (req) => {
                 limit: typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 10) : 6,
               });
               const filtered = freeOnly ? places.filter((p) => p.is_free) : places;
-              filtered.forEach((p) => known.set(p.id, p));
-              await cachePlaces(db, filtered);
+              filtered.forEach((p) => known.set(p.id, p)); // kept in memory for this request only: Google's policy does not allow storing Places content beyond place IDs
               return { type: "tool_result", tool_use_id: tool.id, content: JSON.stringify({ count: filtered.length, places: filtered.map(placeForModel) }) };
             }
             if (tool.name === "present_walk") {

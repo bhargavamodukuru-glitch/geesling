@@ -45,8 +45,8 @@ GitHub Actions (every 3h)           Supabase                         Expo app (i
   - Drinks and age: `involves_alcohol` (🍻), `age_min`.
   - Each event belongs to one of 15 categories: music, nightlife, arts_culture, gallery, film, food_drink, market, festival, comedy, theatre, sports, workshop, community, outdoors, family.
   - `quality_score` is used to choose between duplicates.
-- **`places`**: a cache of Google Places results shown in walks. Data is purged after 30 days, per Google's terms.
-- **`walks`**: Geesling's itineraries: stops, why each one was picked, arrival and leave times, and each leg (walk or TTC line, duration, polyline). They are public by id so they can be shared.
+- **`places`**: unused and kept empty. Geesling does not store Google Places content here, because Google's policy allows storing place IDs only; place details are fetched live for each request.
+- **`walks`**: Geesling's itineraries: stops, why each one was picked, arrival and leave times, and each leg (walk or TTC line, duration, polyline). They are public by id so they can be shared. Each stop keeps a snapshot of the place details Google returned when the walk was made; whether that is allowed is an open question (see HANDOFF.md, compliance risks).
 - **`saved_items`**: each anonymous user's starred events, places, and walks.
 - **Duplicates**: when the same event appears on several sources, the ingest keeps the **single most accurate listing**. The score is source trust (City of Toronto > Ticketmaster > Eventbrite) plus completeness (description, image, venue, price, real end time).
 
