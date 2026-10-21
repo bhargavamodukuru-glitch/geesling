@@ -217,7 +217,7 @@ function Home() {
           [
             ["happening", "HAPPENING"],
             ["saved", `SAVED (${saved.length})`],
-            ["geesling", "ASK GEESLING"],
+            ["geesling", "ASK"],
             ["feedback", "BETA FEEDBACK"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
@@ -225,12 +225,14 @@ function Home() {
             key={key}
             onPress={() => setTab(key)}
             accessibilityRole="tab"
+            // The Ask tab shows "ASK" plus the goose; screen readers hear the full name.
+            accessibilityLabel={key === "geesling" ? "Ask Geesling" : label}
             accessibilityState={{ selected: tab === key }}
             style={[styles.tab, tab === key && styles.tabActive]}
           >
             <View style={styles.tabLabel}>
               <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
-              {key === "geesling" ? <Goose size={0.8} walking={false} /> : null}
+              {key === "geesling" ? <Goose size={1.1} walking={false} /> : null}
             </View>
           </Pressable>
         ))}
