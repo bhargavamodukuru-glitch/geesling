@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Goose } from "@/components/Goose";
 import { GeeslingWelcome } from "@/components/GeeslingWelcome";
@@ -15,7 +16,7 @@ import { PixelButton } from "@/components/Pixel";
 import { SetupNotice } from "@/components/SetupNotice";
 import { useLocation } from "@/hooks/useLocation";
 import { useSaved } from "@/hooks/useSaved";
-import { fetchEventsInBounds } from "@/lib/api";
+import { fetchEventsInBounds, joinTeam } from "@/lib/api";
 import { OUT_OF_AREA_MESSAGE, isInToronto, isViewInToronto } from "@/lib/area";
 import type { PlanRequest } from "@/lib/planner";
 import { isConfigured } from "@/lib/supabase";
@@ -50,6 +51,32 @@ function Home() {
   const { saved } = useSaved();
 
   const [entered, setEntered] = useState(false);
+
+  // The private ?team=<code> link marks this device as team, so its requests are highlighted in the usage sheet.
+  const { team } = useLocalSearchParams<{ team?: string }>();
+  const [teamNote, setTeamNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!team) return;
+    // Take the code out of the address bar. Navigation isn't ready on the first render, so on the web do it directly.
+    if (Platform.OS === "web" && typeof window !== "undefined") window.history.replaceState(null, "", window.location.pathname);
+    joinTeam(team)
+      .then((ok) => {
+        // The router keeps its own copy of the URL; clear the code there too now that navigation is ready.
+        try {
+          router.setParams({ team: undefined });
+        } catch {
+          // Not mounted yet on some first loads; the code just stays in the address bar.
+        }
+        return ok;
+      })
+      .then((ok) => setTeamNote(ok ? "This device is marked as team. Its requests show in yellow in the usage sheet." : "That team link didn't work."))
+      .catch(() => setTeamNote("Couldn't check the team link. Try again later."));
+  }, [team]);
+  useEffect(() => {
+    if (!teamNote) return;
+    const timer = setTimeout(() => setTeamNote(null), 6000);
+    return () => clearTimeout(timer);
+  }, [teamNote]);
   const [pendingRequest, setPendingRequest] = useState<PlanRequest | null>(null);
   const [transition, setTransition] = useState<"walk" | "map" | null>(null);
   const [tab, setTab] = useState<Tab>("happening");
@@ -268,9 +295,20 @@ function Home() {
     </View>
   );
 
-  if (!entered) return transition === "map"
-    ? <GeeslingLoader label="Finding the live map…" />
-    : <GeeslingWelcome onAsk={startPrompt} onSkip={skipToMap} userLocation={location} />;
+  const teamBanner = teamNote ? (
+    <View style={styles.teamNote} pointerEvents="none">
+      <Text style={styles.noteText}>{teamNote}</Text>
+    </View>
+  ) : null;
+
+  if (!entered) {
+    return (
+      <View style={styles.screen}>
+        {transition === "map" ? <GeeslingLoader label="Finding the live map…" /> : <GeeslingWelcome onAsk={startPrompt} onSkip={skipToMap} userLocation={location} />}
+        {teamBanner}
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
@@ -293,12 +331,14 @@ function Home() {
       {transition === "walk" ? (
         <View style={styles.loadingCover}><GeeslingLoader label="Geesling is planning your route…" /></View>
       ) : null}
+      {teamBanner}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.parchment },
+  teamNote: { position: "absolute", top: 12, left: 12, right: 12, zIndex: 30, backgroundColor: colors.gold, borderWidth: 3, borderColor: colors.ink, padding: 8 },
   loadingCover: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 20 },
   layout: { flex: 1 },
   row: { flexDirection: "row" },

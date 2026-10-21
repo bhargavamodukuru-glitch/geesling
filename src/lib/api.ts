@@ -134,3 +134,11 @@ export function logMapLoad(): void {
     if (error) console.warn("map load not counted", error.message);
   });
 }
+
+/** Marks this device's account as team when `code` is the private team code, so the usage sheet highlights it. */
+export async function joinTeam(code: string): Promise<boolean> {
+  await ensureSession();
+  const { data, error } = await supabase.rpc("join_team", { code: code.trim().slice(0, 100) });
+  if (error) throw new Error(error.message);
+  return data === true;
+}

@@ -18,9 +18,11 @@ interface Report {
     free_stops: number;
     total_minutes: number | null;
     time_budget_minutes: number | null;
+    /** "Team" for the owner's devices and test scripts, "User" for everyone else. */
+    source: "Team" | "User";
   }>;
   top_stops: Array<{ name: string; kind: string; picks: number }>;
-  feedback: Array<{ created: string; rating: number | null; message: string; contact: string | null; platform: string | null }>;
+  feedback: Array<{ created: string; rating: number | null; message: string; contact: string | null; platform: string | null; source: "Team" | "User" }>;
 }
 
 const RATING_LABEL: Record<number, string> = { 3: "😍 Love it", 2: "🙂 It's okay", 1: "😕 Not great" };
@@ -56,6 +58,7 @@ function build(report: Report, part: string): Row[] | null {
       return [
         ["Metric", "Value"],
         ["Unique users", s.users],
+        ["Real users (excluding team)", s.real_users],
         ["Saved items", s.saved],
         ["Live & upcoming events", s.events_live],
         ["Last event refresh", s.last_ingest],
@@ -66,7 +69,7 @@ function build(report: Report, part: string): Row[] | null {
       return [["Date", "Goose requests", "Walks created", "Unique users"], ...report.daily.map((d) => [d.day, d.requests, d.walks, d.users])];
     case "walks":
       return [
-        ["Created (Toronto)", "Walk ID", "Prompt", "Walk title", "Stops", "Event stops", "Free stops", "Planned minutes", "Time budget (min)", "Share link"],
+        ["Created (Toronto)", "Walk ID", "Prompt", "Walk title", "Stops", "Event stops", "Free stops", "Planned minutes", "Time budget (min)", "Share link", "Source"],
         ...report.walks.map((w) => [
           w.created,
           w.id,
@@ -78,14 +81,15 @@ function build(report: Report, part: string): Row[] | null {
           w.total_minutes,
           w.time_budget_minutes,
           `${SITE}/walk/${w.id}`,
+          w.source,
         ]),
       ];
     case "top":
       return [["Stop", "Type", "Times picked"], ...report.top_stops.map((t) => [t.name, t.kind, t.picks])];
     case "feedback":
       return [
-        ["Sent (Toronto)", "Rating", "Feedback", "Contact", "Platform"],
-        ...report.feedback.map((f) => [f.created, f.rating ? RATING_LABEL[f.rating] ?? f.rating : null, f.message, f.contact, f.platform]),
+        ["Sent (Toronto)", "Rating", "Feedback", "Contact", "Platform", "Source"],
+        ...report.feedback.map((f) => [f.created, f.rating ? RATING_LABEL[f.rating] ?? f.rating : null, f.message, f.contact, f.platform, f.source]),
       ];
     default:
       return null;
