@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Goose } from "@/components/Goose";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { TorontoPixelBackdrop } from "@/components/TorontoPixelBackdrop";
+import { isNight } from "@/lib/daylight";
 import { DEFAULT_PREFERENCES, buildPlanRequest, type LatLng, type PlanRequest } from "@/lib/planner";
 import { colors, fonts, text } from "@/lib/theme";
 
@@ -113,7 +114,8 @@ function Reveal({ show, delay = 0, children }: { show: boolean; delay?: number; 
 
 export function GeeslingWelcome({ onAsk, onSkip, userLocation }: Props) {
   const [prompt, setPrompt] = useState("");
-  const [nightMode, setNightMode] = useState(false);
+  // Follows the real sunrise and sunset in Toronto until the person taps the day/night toggle.
+  const [nightOverride, setNightOverride] = useState<boolean | null>(null);
   const [ready, setReady] = useState(false);
   const dance = useDance(() => setReady(true));
   const { sample, opacity: sampleOpacity } = useSample(ready && !prompt);
@@ -122,6 +124,7 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation }: Props) {
     const timer = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(timer);
   }, []);
+  const nightMode = nightOverride ?? isNight(now);
   const torontoDate = new Intl.DateTimeFormat("en-CA", {
     weekday: "short",
     month: "short",
@@ -152,7 +155,7 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation }: Props) {
               TORONTO · {torontoDate} · {torontoTime}
             </Text>
             <Pressable
-              onPress={() => setNightMode((value) => !value)}
+              onPress={() => setNightOverride(!nightMode)}
               accessibilityRole="button"
               accessibilityLabel={`Switch to ${nightMode ? "day" : "night"} scene`}
               style={[styles.sceneToggle, nightMode && styles.nightToggle]}
