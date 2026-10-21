@@ -4,6 +4,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.135.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 import { checkBudget, fitsPerPerson, parseBudget } from "./budget.ts";
+import { dayPart, notBefore } from "./daytime.ts";
 import { leavesTooMuchTime, minutesLeftTonight, statedDuration } from "./fill.ts";
 import { contextBlock, MODEL, SYSTEM_PROMPT, TOOLS } from "./prompt.ts";
 import { type MaxPrice, type PlaceItem, searchPlaces } from "./places.ts";
@@ -17,6 +18,7 @@ const LONG_MAX_TURNS = 11;
 // With this many turns left the guide is told to present what it has instead of searching more.
 const WRAP_UP_TURNS_LEFT = 2;
 const MAX_INTERSTOP_TRAVEL_SECONDS = 20 * 60;
+const MAX_PART_CHANGE_TRAVEL_SECONDS = 40 * 60;
 const HOURLY_LIMIT = Number(Deno.env.get("GUIDE_HOURLY_LIMIT") ?? 20);
 
 const corsHeaders = {
@@ -165,7 +167,7 @@ interface PresentWalkInput {
   title: string;
   intro: string;
   outro: string;
-  stops: Array<{ kind: "event" | "place"; id: string; why: string; stay_minutes: number }>;
+  stops: Array<{ kind: "event" | "place"; id: string; why: string; stay_minutes: number; arrive_after?: string }>;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -283,7 +285,8 @@ async function buildStops(
   for (const [index, stop] of chosen.entries()) {
     const item = known.get(stop.id)!;
     const leg = previous ? await bestLeg(routesKey, previous, item, cursor, allowTransit) : null;
-    let arrive = new Date(cursor.getTime() + (leg?.duration_s ?? 0) * 1000);
+    // A stop can ask not to start before a set time (dinner from 17:30); the walk waits until then.
+    let arrive = notBefore(new Date(cursor.getTime() + (leg?.duration_s ?? 0) * 1000), stop.arrive_after);
     let stay = Math.max(10, Math.min(stop.stay_minutes, 240));
     if (item.kind === "event") {
       const startsAt = new Date(item.next_start);
@@ -399,6 +402,8 @@ Deno.serve(async (req) => {
   let presented: PresentWalkInput | null = null;
   let validatedStops: WalkStop[] | null = null;
   let askedToFill = false;
+  // The best walk the guide built but we sent back, used if it runs out of turns before presenting another.
+  let fallback: { walk: PresentWalkInput; stops: WalkStop[] } | null = null;
   const longOuting = usable !== null && usable >= LONG_OUTING_MINUTES;
   const maxTurns = longOuting ? LONG_MAX_TURNS : MAX_TURNS;
 
@@ -502,24 +507,38 @@ Deno.serve(async (req) => {
                 }
               }
               const candidateStops = await buildStops(walk.stops.slice(0, 8), known, origin, start, placesKey, allowTransit);
-              const longHops = candidateStops.slice(1).filter((stop) => stop.leg && stop.leg.duration_s > MAX_INTERSTOP_TRAVEL_SECONDS);
+              // Moving on to a new part of the day (or to a timed meal) may take longer than a hop within one area.
+              const longHops = candidateStops.slice(1).filter((stop, i) => {
+                const prev = candidateStops[i];
+                const newPart = Boolean(walk.stops[i + 1]?.arrive_after) || dayPart(new Date(prev.leave_at)) !== dayPart(new Date(stop.arrive_at));
+                return stop.leg && stop.leg.duration_s > (newPart ? MAX_PART_CHANGE_TRAVEL_SECONDS : MAX_INTERSTOP_TRAVEL_SECONDS);
+              });
               if (longHops.length) {
+                // Keep the part before the first long hop as a fallback; its intro may mention later stops, so it gets a plain one.
+                const cut = candidateStops.indexOf(longHops[0]);
+                if (cut >= 2 && (!fallback || cut > fallback.stops.length)) {
+                  fallback = {
+                    walk: { ...walk, intro: "Honk! Here's what I could fit together without long trips between stops.", stops: walk.stops.slice(0, cut) },
+                    stops: candidateStops.slice(0, cut),
+                  };
+                }
                 const details = longHops.map((stop) => `${stop.item.kind === "event" ? stop.item.title : stop.item.name} (${Math.ceil((stop.leg!.duration_s) / 60)} min from the previous stop)`).join("; ");
                 return {
                   type: "tool_result",
                   tool_use_id: tool.id,
-                  content: `This route exceeds the 20-minute travel limit between stops: ${details}. Keep the requested anchor and order, then search for a nearby replacement within 800–1200 m of the preceding stop. Prefer highly rated places with substantial review counts. If no suitable nearby replacement exists, omit that stop and present a shorter walk.`,
+                  content: `This route exceeds the travel limit (20 minutes between stops, 40 when moving to a new part of the day or a timed meal): ${details}. Keep the requested anchor and order, then search for a nearby replacement within 800–1200 m of the preceding stop. Prefer highly rated places with substantial review counts. If no suitable nearby replacement exists, omit that stop and present a shorter walk.`,
                   is_error: true,
                 };
               }
-              const lastLeave = candidateStops.length ? Date.parse(candidateStops[candidateStops.length - 1].leave_at) : start.getTime();
-              const walkMinutes = Math.round((lastLeave - start.getTime()) / 60_000);
+              // Time actually spent (stays and travel); waiting for a timed stop doesn't count as filled.
+              const walkMinutes = Math.round(candidateStops.reduce((sum, stop) => sum + stop.stay_minutes + (stop.leg?.duration_s ?? 0) / 60, 0));
               if (!askedToFill && leavesTooMuchTime(walkMinutes, usable, candidateStops.length)) {
                 askedToFill = true; // only once, so a thin area still gets a walk
+                if (!fallback || candidateStops.length >= fallback.stops.length) fallback = { walk, stops: candidateStops };
                 return {
                   type: "tool_result",
                   tool_use_id: tool.id,
-                  content: `This walk only fills about ${walkMinutes} of the ${usable} minutes. Add free stops near these ones (park, waterfront, plaza, library, garden, viewpoint, free gallery) with search_places, then present again. If nothing suitable is nearby, present the same stops again and say plainly in the intro that it's a shorter outing. Keep the intro to the stops in the walk.`,
+                  content: `This walk only fills about ${walkMinutes} of the ${usable} minutes with stops and travel (waiting doesn't count). Add free stops near these ones (park, waterfront, plaza, library, garden, viewpoint, free gallery) with search_places, then present again. If nothing suitable is nearby, present the same stops again and say plainly in the intro that it's a shorter outing. Keep the intro to the stops in the walk.`,
                   is_error: true,
                 };
               }
@@ -554,6 +573,13 @@ Deno.serve(async (req) => {
     throw error;
   }
 
+  // Assigned inside the tool callbacks, so TypeScript can't see that it may be set here.
+  const leftover = fallback as { walk: PresentWalkInput; stops: WalkStop[] } | null;
+  if (!presented && leftover) {
+    console.warn("out of turns; presenting the fallback walk", { stops: leftover.stops.length });
+    presented = leftover.walk;
+    validatedStops = leftover.stops;
+  }
   if (!presented) {
     console.warn("no walk presented", { turns: messages.length, hadText: finalText !== "", known: known.size });
     return json({ message: finalText || "Honk? Tell me a bit more — what are you in the mood for?", walk: null });
