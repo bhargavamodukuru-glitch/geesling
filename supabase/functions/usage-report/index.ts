@@ -1,5 +1,5 @@
 // Usage report as CSV for Google Sheets' IMPORTDATA.
-// GET /functions/v1/usage-report?token=<USAGE_REPORT_TOKEN>&part=summary|daily|walks|top
+// GET /functions/v1/usage-report?token=<USAGE_REPORT_TOKEN>&part=summary|daily|walks|top|feedback
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 
 type Row = Array<string | number | null>;
@@ -19,7 +19,10 @@ interface Report {
     time_budget_minutes: number | null;
   }>;
   top_stops: Array<{ name: string; kind: string; picks: number }>;
+  feedback: Array<{ created: string; rating: number | null; message: string; contact: string | null; platform: string | null }>;
 }
+
+const RATING_LABEL: Record<number, string> = { 3: "😍 Love it", 2: "🙂 It's okay", 1: "😕 Not great" };
 
 const SITE = "https://geesling.expo.app";
 
@@ -78,6 +81,11 @@ function build(report: Report, part: string): Row[] | null {
       ];
     case "top":
       return [["Stop", "Type", "Times picked"], ...report.top_stops.map((t) => [t.name, t.kind, t.picks])];
+    case "feedback":
+      return [
+        ["Sent (Toronto)", "Rating", "Feedback", "Contact", "Platform"],
+        ...report.feedback.map((f) => [f.created, f.rating ? RATING_LABEL[f.rating] ?? f.rating : null, f.message, f.contact, f.platform]),
+      ];
     default:
       return null;
   }
@@ -98,7 +106,7 @@ Deno.serve(async (req) => {
     return new Response("Report unavailable\n", { status: 500 });
   }
   const rows = build(data as Report, url.searchParams.get("part") ?? "summary");
-  if (!rows) return new Response("Unknown part. Use summary, daily, walks or top.\n", { status: 400 });
+  if (!rows) return new Response("Unknown part. Use summary, daily, walks, top or feedback.\n", { status: 400 });
 
   return new Response(csv(rows), {
     headers: { "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store" },

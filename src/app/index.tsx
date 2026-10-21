@@ -7,6 +7,7 @@ import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { ItemSheet } from "@/components/ItemSheet";
 import { CityMap } from "@/components/map/CityMap";
 import { RouteKey } from "@/components/map/RouteKey";
+import { FeedbackPanel } from "@/components/panels/FeedbackPanel";
 import { GeeslingPanel } from "@/components/panels/GeeslingPanel";
 import { HappeningPanel } from "@/components/panels/HappeningPanel";
 import { SavedPanel } from "@/components/panels/SavedPanel";
@@ -21,7 +22,7 @@ import { isConfigured } from "@/lib/supabase";
 import { colors, fonts } from "@/lib/theme";
 import type { Bounds, EventFilters, EventItem, MapItem, Walk } from "@/lib/types";
 
-type Tab = "happening" | "saved" | "geesling";
+type Tab = "happening" | "saved" | "geesling" | "feedback";
 
 export default function HomeScreen() {
   if (!isConfigured) return <SetupNotice />;
@@ -217,6 +218,7 @@ function Home() {
             ["happening", "HAPPENING"],
             ["saved", `SAVED (${saved.length})`],
             ["geesling", "ASK GEESLING"],
+            ["feedback", "BETA FEEDBACK"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <Pressable
@@ -246,6 +248,7 @@ function Home() {
           />
         ) : null}
         {tab === "saved" ? <SavedPanel onSelect={(i) => selectItem(i)} onShowWalk={showWalk} /> : null}
+        {tab === "feedback" ? <FeedbackPanel /> : null}
         {/* Kept mounted so the conversation survives tab switches. */}
         <View style={[{ flex: 1 }, tab !== "geesling" && styles.hidden]}>
           <GeeslingPanel

@@ -109,3 +109,20 @@ export async function unsaveItem(kind: SavedItem["kind"], itemId: string): Promi
   const { error } = await supabase.from("saved_items").delete().eq("kind", kind).eq("item_id", itemId);
   if (error) throw new Error(error.message);
 }
+
+export type FeedbackRating = 1 | 2 | 3;
+
+/** Sends beta feedback. People can add feedback but not read it back; it reaches the team's Google Sheet. */
+export async function sendFeedback(input: { rating: FeedbackRating | null; message: string; contact: string | null; platform: string }): Promise<void> {
+  await ensureSession();
+  const { error } = await supabase.from("feedback").insert({
+    rating: input.rating,
+    message: input.message.trim().slice(0, 2000),
+    contact: input.contact?.trim().slice(0, 200) || null,
+    platform: input.platform.slice(0, 40),
+  });
+  if (error) {
+    // The row-level policy allows 5 an hour per person.
+    throw new Error(error.code === "42501" ? "That's a lot of feedback in one hour, thank you! Try again a bit later." : "Couldn't send that just now. Try again?");
+  }
+}
