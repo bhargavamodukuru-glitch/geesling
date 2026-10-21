@@ -223,9 +223,9 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation }: Props) {
               label="Skip to live map →"
               accessibilityLabel="Skip to live map"
               tone="red"
+              small
               onPress={onSkip}
               style={styles.skipButton}
-              textStyle={styles.skipButtonText}
             />
           </Reveal>
         </View>
@@ -255,8 +255,8 @@ const styles = StyleSheet.create({
   conversation: { gap: 20 },
   greeting: { gap: 5, padding: 16, backgroundColor: colors.paper, alignItems: "center" },
   centered: { textAlign: "center" },
-  skipButton: { alignSelf: "center", minWidth: 250, paddingVertical: 12 },
-  skipButtonText: { fontSize: 22, lineHeight: 26 },
+  // Smaller than "Surprise me" and "Find my walk": the map is the secondary path here.
+  skipButton: { alignSelf: "center" },
   composerBubble: { width: "100%", minHeight: 96, backgroundColor: colors.gold, borderWidth: 3, borderColor: colors.ink, borderRadius: 16, borderBottomRightRadius: 3, paddingHorizontal: 10, paddingVertical: 8 },
   honk: { fontFamily: fonts.heading, fontSize: 19, color: colors.accent },
   input: {
