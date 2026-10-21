@@ -4,13 +4,16 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.135.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 import { checkBudget, fitsPerPerson, parseBudget } from "./budget.ts";
-import { leavesTooMuchTime } from "./fill.ts";
+import { leavesTooMuchTime, minutesLeftTonight, statedDuration } from "./fill.ts";
 import { contextBlock, MODEL, SYSTEM_PROMPT, TOOLS } from "./prompt.ts";
 import { type MaxPrice, type PlaceItem, searchPlaces } from "./places.ts";
 import { bestLeg, type Leg } from "./routes.ts";
 
 const DOWNTOWN = { lat: 43.6532, lng: -79.3832 };
 const MAX_TURNS = 8;
+// A long outing (6+ hours) needs more searching, so it gets more turns and more thinking.
+const LONG_OUTING_MINUTES = 360;
+const LONG_MAX_TURNS = 11;
 // With this many turns left the guide is told to present what it has instead of searching more.
 const WRAP_UP_TURNS_LEFT = 2;
 const MAX_INTERSTOP_TRAVEL_SECONDS = 20 * 60;
@@ -347,8 +350,13 @@ Deno.serve(async (req) => {
   const now = new Date();
   const targetDates = requestedDateRange(prompt, now);
   const start = targetDates?.from ?? (body.startAt && !Number.isNaN(Date.parse(body.startAt)) && Date.parse(body.startAt) > now.getTime() ? new Date(body.startAt) : now);
-  const budget = typeof body.timeBudgetMinutes === "number" && body.timeBudgetMinutes > 0 ? Math.min(body.timeBudgetMinutes, 16 * 60) : null;
-  const end = targetDates?.to ?? new Date(start.getTime() + (budget ?? 6 * 60) * 60_000);
+  // The time chips win; with "Any time", a duration written in the message ("12 hours") is used instead.
+  const chipBudget = typeof body.timeBudgetMinutes === "number" && body.timeBudgetMinutes > 0 ? Math.min(body.timeBudgetMinutes, 16 * 60) : null;
+  const budget = chipBudget ?? statedDuration(prompt);
+  // Late in the day only the hours until most places close can be planned; the guide says so.
+  const leftTonight = targetDates ? null : minutesLeftTonight(start);
+  const usable = budget !== null && leftTonight !== null && leftTonight < budget ? Math.max(leftTonight, 0) : budget;
+  const end = targetDates?.to ?? new Date(start.getTime() + (usable ?? 6 * 60) * 60_000);
   const origin = isLatLng(body.origin) ? body.origin : null;
   const searchOrigin = origin ?? DOWNTOWN;
   const freeOnly = body.freeOnly === true;
@@ -375,7 +383,8 @@ Deno.serve(async (req) => {
         originIsUser: origin !== null,
         startIso: start.toISOString(),
         endIso: end.toISOString(),
-        timeBudgetMinutes: budget,
+        timeBudgetMinutes: usable,
+        askedMinutes: budget !== usable ? budget : null,
         freeOnly,
         travel,
         spend,
@@ -390,16 +399,18 @@ Deno.serve(async (req) => {
   let presented: PresentWalkInput | null = null;
   let validatedStops: WalkStop[] | null = null;
   let askedToFill = false;
+  const longOuting = usable !== null && usable >= LONG_OUTING_MINUTES;
+  const maxTurns = longOuting ? LONG_MAX_TURNS : MAX_TURNS;
 
   try {
-    for (let turn = 0; turn < MAX_TURNS && !presented; turn++) {
+    for (let turn = 0; turn < maxTurns && !presented; turn++) {
       const response = await client.beta.messages.create({
         model: MODEL,
         max_tokens: 4096,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
         thinking: { type: "adaptive" },
-        output_config: { effort: "low" },
+        output_config: { effort: longOuting ? "medium" : "low" },
         system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
         tools: TOOLS,
         messages,
@@ -503,12 +514,12 @@ Deno.serve(async (req) => {
               }
               const lastLeave = candidateStops.length ? Date.parse(candidateStops[candidateStops.length - 1].leave_at) : start.getTime();
               const walkMinutes = Math.round((lastLeave - start.getTime()) / 60_000);
-              if (!askedToFill && leavesTooMuchTime(walkMinutes, budget, candidateStops.length)) {
+              if (!askedToFill && leavesTooMuchTime(walkMinutes, usable, candidateStops.length)) {
                 askedToFill = true; // only once, so a thin area still gets a walk
                 return {
                   type: "tool_result",
                   tool_use_id: tool.id,
-                  content: `This walk only fills about ${walkMinutes} of the ${budget} minutes. Add free stops near these ones (park, waterfront, plaza, library, garden, viewpoint, free gallery) with search_places, then present again. If nothing suitable is nearby, present the same stops again and say plainly in the intro that it's a shorter outing. Keep the intro to the stops in the walk.`,
+                  content: `This walk only fills about ${walkMinutes} of the ${usable} minutes. Add free stops near these ones (park, waterfront, plaza, library, garden, viewpoint, free gallery) with search_places, then present again. If nothing suitable is nearby, present the same stops again and say plainly in the intro that it's a shorter outing. Keep the intro to the stops in the walk.`,
                   is_error: true,
                 };
               }
@@ -524,7 +535,7 @@ Deno.serve(async (req) => {
         }),
       );
       if (!presented) {
-        const turnsLeft = MAX_TURNS - 1 - turn;
+        const turnsLeft = maxTurns - 1 - turn;
         const nudge: Anthropic.Beta.BetaTextBlockParam[] =
           turnsLeft <= WRAP_UP_TURNS_LEFT
             ? [{ type: "text", text: "You are almost out of turns. Call present_walk now with the best stops you have already found (a shorter walk is fine). Do not search again." }]
