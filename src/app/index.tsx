@@ -263,7 +263,7 @@ function Home() {
 
   if (!entered) return transition === "map"
     ? <GeeslingLoader label="Finding the live map…" />
-    : <GeeslingWelcome onAsk={startPrompt} onSkip={skipToMap} userLocation={location} onLocate={locate} />;
+    : <GeeslingWelcome onAsk={startPrompt} onSkip={skipToMap} userLocation={location} />;
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>

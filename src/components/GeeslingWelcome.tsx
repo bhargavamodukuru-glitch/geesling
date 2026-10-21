@@ -1,27 +1,122 @@
 import { useEffect, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { AccessibilityInfo, Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Goose } from "@/components/Goose";
-import { PlannerFlow } from "@/components/PlannerFlow";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { TorontoPixelBackdrop } from "@/components/TorontoPixelBackdrop";
-import { SHORTCUT_VIBES, VIBES, type LatLng, type PlanRequest, type Vibe } from "@/lib/planner";
+import { DEFAULT_PREFERENCES, buildPlanRequest, type LatLng, type PlanRequest } from "@/lib/planner";
 import { colors, fonts, text } from "@/lib/theme";
 
 interface Props {
   onAsk: (request: PlanRequest) => void;
   onSkip: () => void;
   userLocation: LatLng | null;
-  onLocate: () => Promise<LatLng | null>;
 }
 
-type Mode = "home" | "planner" | "text";
+/** Example requests that fade in and out in the empty message box. */
+const SAMPLES = [
+  "im bored and want a sweet treat, then I just want to see whats happening",
+  "i have a date soon and need some cute ideas, maybe a good dinner spot followed by ice cream",
+  "free stuff to do with friends tonight, nothing too loud",
+  "rainy afternoon: a cozy café, a bookstore and maybe a gallery",
+  "in town for the day, cheap eats and the best views",
+];
+const SAMPLE_MS = 3800;
+const FADE_MS = 450;
 
-export function GeeslingWelcome({ onAsk, onSkip, userLocation, onLocate }: Props) {
-  const [mode, setMode] = useState<Mode>("home");
-  const [vibe, setVibe] = useState<Vibe | null>(null);
+const NATIVE_DRIVER = Platform.OS !== "web";
+
+/** Geesling's little dance on a fresh load: hop, wiggle, turn around, hop again. */
+function useDance(onDone: () => void) {
+  const [hop] = useState(() => new Animated.Value(0));
+  const [tilt] = useState(() => new Animated.Value(0));
+  const [flip, setFlip] = useState(false);
+  const [dancing, setDancing] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const finish = () => {
+      if (cancelled) return;
+      setDancing(false);
+      setFlip(false);
+      onDone();
+    };
+    const step = (toHop: number, toTilt: number, ms: number) =>
+      Animated.parallel([
+        Animated.timing(hop, { toValue: toHop, duration: ms, easing: Easing.out(Easing.quad), useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(tilt, { toValue: toTilt, duration: ms, easing: Easing.inOut(Easing.quad), useNativeDriver: NATIVE_DRIVER }),
+      ]);
+    const bounce = (side: number) => Animated.sequence([step(-14, side, 160), step(0, 0, 160)]);
+    const turn = Animated.timing(hop, { toValue: 0, duration: 1, useNativeDriver: NATIVE_DRIVER });
+
+    // People who turn off motion get the bubbles straight away.
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (cancelled) return;
+      if (reduced) return finish();
+      Animated.sequence([
+        Animated.delay(250),
+        bounce(-1),
+        bounce(1),
+        turn,
+      ]).start(() => {
+        if (cancelled) return;
+        setFlip(true);
+        Animated.sequence([bounce(1), bounce(-1), Animated.delay(120)]).start(() => {
+          if (cancelled) return;
+          setFlip(false);
+          Animated.sequence([step(-22, 0, 200), step(0, 0, 220)]).start(finish);
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Runs once per fresh load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const rotate = tilt.interpolate({ inputRange: [-1, 1], outputRange: ["-10deg", "10deg"] });
+  return { style: { transform: [{ translateY: hop }, { rotate }] }, flip, dancing };
+}
+
+/** Cycles through SAMPLES with a fade, while `active`. */
+function useSample(active: boolean) {
+  const [index, setIndex] = useState(0);
+  const [opacity] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => {
+      Animated.timing(opacity, { toValue: 0, duration: FADE_MS, useNativeDriver: NATIVE_DRIVER }).start(() => {
+        setIndex((i) => (i + 1) % SAMPLES.length);
+        Animated.timing(opacity, { toValue: 1, duration: FADE_MS, useNativeDriver: NATIVE_DRIVER }).start();
+      });
+    }, SAMPLE_MS);
+    return () => clearInterval(id);
+  }, [active, opacity]);
+  return { sample: SAMPLES[index], opacity };
+}
+
+/** Fades and lifts children in once `show` turns true, after `delay` ms. */
+function Reveal({ show, delay = 0, children }: { show: boolean; delay?: number; children: React.ReactNode }) {
+  const [progress] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    if (!show) return;
+    Animated.timing(progress, { toValue: 1, duration: 320, delay, easing: Easing.out(Easing.quad), useNativeDriver: NATIVE_DRIVER }).start();
+  }, [show, delay, progress]);
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+  return (
+    <Animated.View style={{ opacity: progress, transform: [{ translateY }] }} pointerEvents={show ? "auto" : "none"}>
+      {children}
+    </Animated.View>
+  );
+}
+
+export function GeeslingWelcome({ onAsk, onSkip, userLocation }: Props) {
   const [prompt, setPrompt] = useState("");
   const [nightMode, setNightMode] = useState(false);
+  const [ready, setReady] = useState(false);
+  const dance = useDance(() => setReady(true));
+  const { sample, opacity: sampleOpacity } = useSample(ready && !prompt);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30_000);
@@ -43,10 +138,9 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation, onLocate }: Props
     const value = prompt.trim();
     if (value) onAsk({ prompt: value });
   };
-  const startPlanner = (start: Vibe) => {
-    setVibe(start);
-    setMode("planner");
-  };
+  // One tap: Geesling picks everything, starting near the person when their location is known.
+  const surprise = () =>
+    onAsk(buildPlanRequest({ ...DEFAULT_PREFERENCES, vibe: "surprise", area: userLocation ? "near" : "explore" }, userLocation));
 
   return (
     <SafeAreaView style={[styles.screen, nightMode && styles.nightScreen]} edges={["top", "left", "right", "bottom"]}>
@@ -69,86 +163,62 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation, onLocate }: Props
             </Pressable>
           </View>
           <View style={styles.brand}>
-            <Goose size={5} walking={false} />
+            <Animated.View style={dance.style}>
+              <Goose size={5} walking={false} flapping={dance.dancing} flip={dance.flip} />
+            </Animated.View>
             <View style={{ gap: 0 }}>
               <Text style={[styles.wordmark, nightMode && styles.nightWordmark]}>GEESLING</Text>
               <Text style={[styles.submark, nightMode && styles.nightSubmark]}>WANDER, WITH GOOSEY GANDER</Text>
             </View>
           </View>
 
-          {mode === "planner" ? (
-            <PlannerFlow
-              initialVibe={vibe}
-              userLocation={userLocation}
-              onLocate={onLocate}
-              onSubmit={onAsk}
-              onCancel={() => setMode("home")}
-            />
-          ) : (
-            <View style={styles.conversation} accessibilityLabel="Chat with Geesling">
-              <View style={styles.gooseMessageRow}>
-                <View style={styles.avatar}><Goose size={2.2} walking={false} /></View>
-                <Panel style={styles.greeting} shadow={3}>
-                  <Text style={styles.honk}>HONK!</Text>
-                  <Text style={text.body}>
-                    {mode === "home"
-                      ? "Nothing planned? Answer a few quick questions and I shall waddle up a plan that fits your time and budget."
-                      : "Need a few ideas on what to do today? Tell me what vibe you’re feeling and I shall waddle you around the city."}
-                  </Text>
-                </Panel>
+          <View style={styles.conversation} accessibilityLabel="Chat with Geesling">
+            <Reveal show={ready}>
+              <Panel style={styles.greeting} shadow={3}>
+                <Text style={styles.honk}>HONK!</Text>
+                <Text style={[text.body, styles.centered]}>Unsure what to do? Let me waddle you around the city.</Text>
+              </Panel>
+            </Reveal>
+
+            <Reveal show={ready} delay={350}>
+              <View style={styles.composerBubble}>
+                  {!prompt ? (
+                    // Sample requests fade in and out like a placeholder; screen readers get them as the hint.
+                    <Animated.Text style={[styles.input, styles.sample, { opacity: sampleOpacity }]} pointerEvents="none" numberOfLines={3}>
+                      {sample}
+                    </Animated.Text>
+                  ) : null}
+                  <TextInput
+                    value={prompt}
+                    onChangeText={setPrompt}
+                    style={styles.input}
+                    multiline
+                    maxLength={1200}
+                    accessibilityLabel="Tell Geesling what you're in the mood for"
+                    accessibilityHint={`For example: ${SAMPLES[0]}`}
+                    onSubmitEditing={submit}
+                    onKeyPress={(event) => {
+                      const native = event.nativeEvent as { key: string; shiftKey?: boolean };
+                      if (Platform.OS === "web" && native.key === "Enter" && !native.shiftKey) {
+                        event.preventDefault();
+                        submit();
+                      }
+                    }}
+                    submitBehavior="submit"
+                    returnKeyType="send"
+                  />
               </View>
+            </Reveal>
 
-              {mode === "home" ? (
-                <>
-                  <View style={styles.shortcutBlock}>
-                    <Text style={[styles.shortcutLabel, nightMode && styles.nightClock]}>WHAT’S THE VIBE TODAY?</Text>
-                    <View style={styles.shortcuts}>
-                      {SHORTCUT_VIBES.map((id) => {
-                        const v = VIBES.find((x) => x.id === id);
-                        return v ? <PixelButton key={id} label={v.label} icon={v.icon} small onPress={() => startPlanner(id)} /> : null;
-                      })}
-                    </View>
-                  </View>
-                  <Pressable onPress={() => setMode("text")} accessibilityRole="link" style={[styles.skip, styles.pill]}>
-                    <Text style={styles.pillText}>or just tell me what you’re after</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <View style={styles.userMessageRow}>
-                    <View style={styles.composerBubble}>
-                      <TextInput
-                        value={prompt}
-                        onChangeText={setPrompt}
-                        placeholder="What are you in the mood for?"
-                        placeholderTextColor={colors.inkSoft}
-                        style={styles.input}
-                        multiline
-                        maxLength={1200}
-                        accessibilityLabel="Tell Geesling what you would like to do"
-                        onSubmitEditing={submit}
-                        onKeyPress={(event) => {
-                          const native = event.nativeEvent as { key: string; shiftKey?: boolean };
-                          if (Platform.OS === "web" && native.key === "Enter" && !native.shiftKey) {
-                            event.preventDefault();
-                            submit();
-                          }
-                        }}
-                        submitBehavior="submit"
-                        returnKeyType="send"
-                      />
-                    </View>
-                  </View>
-                  <View style={styles.sendRow}>
-                    <PixelButton label="← Back" small onPress={() => setMode("home")} />
-                    <PixelButton label="Find my walk" tone="red" disabled={!prompt.trim()} onPress={submit} />
-                  </View>
-                </>
-              )}
-            </View>
-          )}
+            <Reveal show={ready} delay={650}>
+              <View style={styles.sendRow}>
+                <PixelButton label="Surprise me" icon="🎲" onPress={surprise} />
+                <PixelButton label="Find my walk" tone="red" disabled={!prompt.trim()} onPress={submit} />
+              </View>
+            </Reveal>
+          </View>
 
-          {mode === "home" ? (
+          <Reveal show={ready} delay={850}>
             <PixelButton
               label="Skip to live map →"
               accessibilityLabel="Skip to live map"
@@ -157,12 +227,7 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation, onLocate }: Props
               style={styles.skipButton}
               textStyle={styles.skipButtonText}
             />
-          ) : (
-            // Elsewhere a red button would compete with the main action ("Plan it", "Find my walk").
-            <Pressable onPress={onSkip} accessibilityRole="link" style={[styles.skip, styles.pill]}>
-              <Text style={styles.pillText}>Skip to live map →</Text>
-            </Pressable>
-          )}
+          </Reveal>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -186,17 +251,13 @@ const styles = StyleSheet.create({
   nightWordmark: { color: "#F0785D" },
   submark: { fontFamily: fonts.body, fontSize: 15, color: colors.inkSoft, letterSpacing: 1.3 },
   nightSubmark: { color: "#E8D6A7" },
-  conversation: { gap: 16 },
-  gooseMessageRow: { alignSelf: "flex-start", flexDirection: "row", alignItems: "flex-end", gap: 9, width: "92%" },
-  avatar: { width: 38, height: 38, alignItems: "center", justifyContent: "center", backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
-  greeting: { flex: 1, gap: 5, padding: 16, backgroundColor: colors.paper },
+  // Same gap as `content`, so every block on the screen is evenly spaced.
+  conversation: { gap: 20 },
+  greeting: { gap: 5, padding: 16, backgroundColor: colors.paper, alignItems: "center" },
+  centered: { textAlign: "center" },
   skipButton: { alignSelf: "center", minWidth: 250, paddingVertical: 12 },
   skipButtonText: { fontSize: 22, lineHeight: 26 },
-  shortcutBlock: { gap: 8, alignItems: "center" },
-  shortcutLabel: { fontFamily: fonts.heading, fontSize: 16, color: colors.ink, letterSpacing: 1 },
-  shortcuts: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 },
-  userMessageRow: { width: "100%", alignItems: "flex-end" },
-  composerBubble: { width: "82%", minHeight: 96, backgroundColor: colors.gold, borderWidth: 3, borderColor: colors.ink, borderRadius: 16, borderBottomRightRadius: 3, paddingHorizontal: 10, paddingVertical: 8 },
+  composerBubble: { width: "100%", minHeight: 96, backgroundColor: colors.gold, borderWidth: 3, borderColor: colors.ink, borderRadius: 16, borderBottomRightRadius: 3, paddingHorizontal: 10, paddingVertical: 8 },
   honk: { fontFamily: fonts.heading, fontSize: 19, color: colors.accent },
   input: {
     minHeight: 76,
@@ -207,11 +268,11 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 22,
     color: colors.ink,
+    textAlign: "center",
     textAlignVertical: "top",
   },
-  sendRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  skip: { alignSelf: "center", paddingHorizontal: 14, paddingVertical: 8 },
-  // Paper pill so the link stays readable over the skyline backdrop in day and night scenes.
-  pill: { backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink },
-  pillText: { color: colors.ink, fontFamily: fonts.body, fontSize: 18, textDecorationLine: "underline" },
+  // Sits over the empty input in the same spot as typed text would.
+  // Exactly three lines tall, so a long sample is cut off with "…" instead of peeking out a fourth line.
+  sample: { position: "absolute", top: 16, left: 16, right: 16, minHeight: 0, paddingVertical: 0, lineHeight: 24, maxHeight: 24 * 3, overflow: "hidden", color: colors.inkSoft },
+  sendRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 10 },
 });

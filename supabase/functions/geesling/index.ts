@@ -5,6 +5,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.135.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 import { checkBudget, fitsPerPerson, parseBudget } from "./budget.ts";
 import { dayPart, notBefore } from "./daytime.ts";
+import { relativeDay, requestedStart, torontoDay } from "./when.ts";
 import { leavesTooMuchTime, minutesLeftTonight, statedDuration } from "./fill.ts";
 import { contextBlock, MODEL, SYSTEM_PROMPT, TOOLS } from "./prompt.ts";
 import { type MaxPrice, type PlaceItem, searchPlaces } from "./places.ts";
@@ -93,6 +94,12 @@ const MONTHS: Record<string, number> = {
   may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7, sep: 8, sept: 8,
   september: 8, oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
 };
+
+function dayRange(year: number, month: number, day: number): RequestedDateRange {
+  const from = torontoMidnightUtc(year, month, day);
+  const label = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(from);
+  return { from, to: torontoMidnightUtc(year, month, day + 1), label };
+}
 
 function torontoMidnightUtc(year: number, month: number, day: number): Date {
   const wanted = Date.UTC(year, month, day);
@@ -351,8 +358,15 @@ Deno.serve(async (req) => {
   }
 
   const now = new Date();
-  const targetDates = requestedDateRange(prompt, now);
-  const start = targetDates?.from ?? (body.startAt && !Number.isNaN(Date.parse(body.startAt)) && Date.parse(body.startAt) > now.getTime() ? new Date(body.startAt) : now);
+  // "Oct 21" or "2026-10-21" first; otherwise everyday words like "tomorrow" or "friday" name the day.
+  const namedDay = relativeDay(prompt, now);
+  const todayKey = torontoDay(now);
+  const futureDay = namedDay && (namedDay.year !== todayKey.year || namedDay.month !== todayKey.month || namedDay.day !== todayKey.day) ? namedDay : null;
+  const targetDates = requestedDateRange(prompt, now) ?? (futureDay ? dayRange(futureDay.year, futureDay.month, futureDay.day) : null);
+  // A named time ("at 12pm", "lunch") sets the start; a named day alone starts at 10 am rather than midnight.
+  const askedStart = requestedStart(prompt, now, targetDates ? torontoDay(targetDates.from) : namedDay);
+  const clientStart = body.startAt && !Number.isNaN(Date.parse(body.startAt)) && Date.parse(body.startAt) > now.getTime() ? new Date(body.startAt) : null;
+  const start = askedStart ?? clientStart ?? (targetDates ? new Date(Math.max(targetDates.from.getTime(), now.getTime())) : now);
   // The time chips win; with "Any time", a duration written in the message ("12 hours") is used instead.
   const chipBudget = typeof body.timeBudgetMinutes === "number" && body.timeBudgetMinutes > 0 ? Math.min(body.timeBudgetMinutes, 16 * 60) : null;
   const budget = chipBudget ?? statedDuration(prompt);
@@ -392,6 +406,7 @@ Deno.serve(async (req) => {
         travel,
         spend,
         requestedDateRange: targetDates?.label ?? null,
+        startLabel: askedStart ? torontoLabel(askedStart) : null,
       })}\n\nRequest: ${prompt}`,
     },
   ];
