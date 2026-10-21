@@ -89,7 +89,7 @@ export function costRows(report: CostReport): Row[] {
       free: 1000,
       per1000: 40,
       units: unitsOf(report, "google_places"),
-      note: "Reviews and descriptions in the request put every search in this tier.",
+      note: "Geesling stops at 990 a month (hard cap), so this stays free. Reviews and descriptions in the request put every search in this tier.",
     },
     {
       service: "Google Routes",

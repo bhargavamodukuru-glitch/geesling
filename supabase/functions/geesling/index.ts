@@ -32,6 +32,8 @@ function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: n
 const HOURLY_LIMIT = Number(Deno.env.get("GUIDE_HOURLY_LIMIT") ?? 20);
 // Anonymous accounts are free to create, so the per-person limit alone can't cap spend: this caps everyone together.
 const DAILY_LIMIT = Number(Deno.env.get("GUIDE_DAILY_LIMIT") ?? 300);
+// Hard stop on Google Places searches each month (Toronto calendar month), under Google's 1,000 free.
+const PLACES_MONTHLY_CAP = Number(Deno.env.get("PLACES_MONTHLY_CAP") ?? 990);
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -414,6 +416,13 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
   const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, 1200) : "";
   if (!prompt) return json({ error: "prompt is required" }, 400);
 
+  // Once this month's place searches are used up, nothing more is planned until the 1st.
+  const { data: placesUsed, error: quotaError } = await db.rpc("quota_used", { p_service: "google_places" });
+  if (quotaError) throw new Error(`quota check failed: ${quotaError.message}`);
+  if ((placesUsed ?? 0) >= PLACES_MONTHLY_CAP) {
+    return json({ message: "Honk! I've used up all my place searches for this month. The live map still works, and I'll be planning routes again on the 1st.", walk: null }, 429);
+  }
+
   const limited = await rateLimited(db, owner);
   if (limited === "day") {
     return json({ message: "Honk! I've waddled all the walks I can for today. The live map still works, and I'll be back tomorrow.", walk: null }, 429);
@@ -546,6 +555,12 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
               if (!placesKey) return { type: "tool_result", tool_use_id: tool.id, content: "Place search is unavailable right now; build the walk from events.", is_error: true };
               const query = typeof input.query === "string" ? input.query : "";
               if (!query.trim()) return { type: "tool_result", tool_use_id: tool.id, content: "query is required", is_error: true };
+              // Reserve this search against the monthly cap first; past it (or if the check fails), no search is sent.
+              const { data: reserved, error: reserveError } = await db.rpc("take_quota", { p_service: "google_places", p_cap: PLACES_MONTHLY_CAP });
+              if (reserveError || reserved !== true) {
+                if (reserveError) console.error("take_quota failed", reserveError.message);
+                return { type: "tool_result", tool_use_id: tool.id, content: "Place search is unavailable: this month's search limit has been reached. Build the route from the events and places you already have.", is_error: true };
+              }
               meter.placesSearches += 1;
               const places = await searchPlaces(placesKey, {
                 query,
