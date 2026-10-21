@@ -8,7 +8,9 @@ import { type MaxPrice, type PlaceItem, searchPlaces } from "./places.ts";
 import { bestLeg, type Leg } from "./routes.ts";
 
 const DOWNTOWN = { lat: 43.6532, lng: -79.3832 };
-const MAX_TURNS = 5;
+const MAX_TURNS = 8;
+// With this many turns left the guide is told to present what it has instead of searching more.
+const WRAP_UP_TURNS_LEFT = 2;
 const MAX_INTERSTOP_TRAVEL_SECONDS = 20 * 60;
 const HOURLY_LIMIT = Number(Deno.env.get("GUIDE_HOURLY_LIMIT") ?? 20);
 
@@ -473,7 +475,14 @@ Deno.serve(async (req) => {
           }
         }),
       );
-      if (!presented) messages.push({ role: "user", content: results });
+      if (!presented) {
+        const turnsLeft = MAX_TURNS - 1 - turn;
+        const nudge: Anthropic.Beta.BetaTextBlockParam[] =
+          turnsLeft <= WRAP_UP_TURNS_LEFT
+            ? [{ type: "text", text: "You are almost out of turns. Call present_walk now with the best stops you have already found (a shorter walk is fine). Do not search again." }]
+            : [];
+        messages.push({ role: "user", content: [...results, ...nudge] });
+      }
     }
   } catch (error) {
     if (error instanceof Anthropic.RateLimitError) {
@@ -487,6 +496,7 @@ Deno.serve(async (req) => {
   }
 
   if (!presented) {
+    console.warn("no walk presented", { turns: messages.length, hadText: finalText !== "", known: known.size });
     return json({ message: finalText || "Honk? Tell me a bit more — what are you in the mood for?", walk: null });
   }
 
