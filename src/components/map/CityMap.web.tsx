@@ -1,3 +1,4 @@
+/// <reference types="google.maps" />
 // Web map: Google Maps JavaScript API via @vis.gl/react-google-maps.
 import { AdvancedMarker, APIProvider, Map, Polyline, useMap } from "@vis.gl/react-google-maps";
 import { useEffect, useMemo } from "react";
@@ -9,11 +10,49 @@ import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
 import { colors, text } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
-import { TORONTO_BOUNDS } from "@/lib/area";
+import { OUTSIDE_MASK_OUTER, PAN_BOUNDS, TORONTO_RING } from "@/lib/area";
 import { TORONTO, walkFocusBounds, type CityMapProps } from "./types";
 
-// Geesling covers Toronto only: the camera cannot leave this box.
-const TORONTO_RESTRICTION = { latLngBounds: { ...TORONTO_BOUNDS }, strictBounds: true };
+// Geesling covers Toronto only. People can pan a little past the city limit to see the border,
+// but the camera stops at this box.
+const PAN_RESTRICTION = { latLngBounds: { ...PAN_BOUNDS }, strictBounds: true };
+const toPath = (ring: readonly (readonly [number, number])[]) => ring.map(([lat, lng]) => ({ lat, lng }));
+// Google draws a hole where the inner ring winds the opposite way to the outer one.
+function signedArea(ring: readonly (readonly [number, number])[]) {
+  return ring.reduce((sum, [lat, lng], i) => {
+    const [nLat, nLng] = ring[(i + 1) % ring.length];
+    return sum + (lng * nLat - nLng * lat);
+  }, 0);
+}
+const HOLE_RING = signedArea(OUTSIDE_MASK_OUTER) * signedArea(TORONTO_RING) > 0 ? [...TORONTO_RING].reverse() : TORONTO_RING;
+
+/** Dims the map outside the city limit and draws the limit as a dashed line. */
+function CityLimit() {
+  const map = useMap();
+  useEffect(() => {
+    if (!map) return;
+    const mask = new google.maps.Polygon({
+      paths: [toPath(OUTSIDE_MASK_OUTER), toPath(HOLE_RING)],
+      fillColor: "#202B49",
+      fillOpacity: 0.38,
+      strokeWeight: 0,
+      clickable: false,
+      map,
+    });
+    const line = new google.maps.Polyline({
+      path: [...toPath(TORONTO_RING), toPath(TORONTO_RING)[0]],
+      strokeOpacity: 0,
+      icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: colors.accent, scale: 3 }, offset: "0", repeat: "14px" }],
+      clickable: false,
+      map,
+    });
+    return () => {
+      mask.setMap(null);
+      line.setMap(null);
+    };
+  }, [map]);
+  return null;
+}
 
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 // Advanced markers need a Map ID. Create one with the Stardew style from mapStyle.ts in Google Cloud.
@@ -72,8 +111,8 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
         defaultCenter={userLocation ?? TORONTO}
         defaultZoom={13}
         gestureHandling="greedy"
-        restriction={TORONTO_RESTRICTION}
-        minZoom={10}
+        restriction={PAN_RESTRICTION}
+        minZoom={9}
         disableDefaultUI
         zoomControl
         clickableIcons={false}
@@ -88,6 +127,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
           onBoundsChange({ minLat: b.south, maxLat: b.north, minLng: b.west, maxLng: b.east });
         }}
       >
+        <CityLimit />
         <CameraController walk={walk} userLocation={userLocation} focusKey={focusKey} />
         {legs.map((leg) => (
           <Polyline

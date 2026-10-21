@@ -14,7 +14,7 @@ import { SetupNotice } from "@/components/SetupNotice";
 import { useLocation } from "@/hooks/useLocation";
 import { useSaved } from "@/hooks/useSaved";
 import { fetchEventsInBounds } from "@/lib/api";
-import { isInToronto } from "@/lib/area";
+import { OUT_OF_AREA_MESSAGE, isInToronto, isViewInToronto } from "@/lib/area";
 import type { PlanRequest } from "@/lib/planner";
 import { isConfigured } from "@/lib/supabase";
 import { colors, fonts } from "@/lib/theme";
@@ -188,7 +188,11 @@ function Home() {
           <PixelButton label="Clear walk" small onPress={clearWalk} />
         </View>
       ) : null}
-      {!walk && entered && !locationNoteHidden && locationNote ? (
+      {entered && !walk && bounds && !isViewInToronto(bounds) ? (
+        <View style={styles.walkBanner} accessibilityLiveRegion="polite">
+          <Text style={styles.noteText}>{OUT_OF_AREA_MESSAGE}</Text>
+        </View>
+      ) : !walk && entered && !locationNoteHidden && locationNote ? (
         <View style={styles.walkBanner}>
           <Text style={styles.noteText}>{locationNote.text}</Text>
           {locationNote.retry ? <PixelButton label="Try again" small onPress={() => void locate()} /> : null}

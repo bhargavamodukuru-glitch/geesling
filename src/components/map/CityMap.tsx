@@ -1,15 +1,19 @@
 // Native map: Apple Maps on iOS, Google Maps on Android (react-native-maps).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet } from "react-native";
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from "react-native-maps";
+import MapView, { Marker, Polygon, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from "react-native-maps";
 import { MapPin } from "@/components/MapPin";
-import { TORONTO_SPAN, clampToToronto } from "@/lib/area";
+import { OUTSIDE_MASK_OUTER, PAN_BOUNDS, TORONTO_RING, clampToPanArea } from "@/lib/area";
 import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
 import { colors } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
 import { STARDEW_MAP_STYLE } from "./mapStyle";
 import { DEFAULT_DELTA, TORONTO, walkFocusBounds, type CityMapProps } from "./types";
+
+const PAN_SPAN = { lat: PAN_BOUNDS.north - PAN_BOUNDS.south, lng: PAN_BOUNDS.east - PAN_BOUNDS.west };
+const OUTER = OUTSIDE_MASK_OUTER.map(([latitude, longitude]) => ({ latitude, longitude }));
+const HOLE = TORONTO_RING.map(([latitude, longitude]) => ({ latitude, longitude }));
 
 function regionToBounds(region: Region) {
   return {
@@ -61,17 +65,17 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
       onBoundsChange(regionToBounds(region));
       return;
     }
-    const center = clampToToronto(region.latitude, region.longitude);
+    const center = clampToPanArea(region.latitude, region.longitude);
     const drifted = Math.abs(center.lat - region.latitude) > 1e-6 || Math.abs(center.lng - region.longitude) > 1e-6;
-    const tooWide = region.latitudeDelta > TORONTO_SPAN.lat * 1.2 || region.longitudeDelta > TORONTO_SPAN.lng * 1.2;
+    const tooWide = region.latitudeDelta > PAN_SPAN.lat * 1.2 || region.longitudeDelta > PAN_SPAN.lng * 1.2;
     if (drifted || tooWide) {
       clampingRef.current = true;
       mapRef.current?.animateToRegion(
         {
           latitude: center.lat,
           longitude: center.lng,
-          latitudeDelta: Math.min(region.latitudeDelta, TORONTO_SPAN.lat),
-          longitudeDelta: Math.min(region.longitudeDelta, TORONTO_SPAN.lng),
+          latitudeDelta: Math.min(region.latitudeDelta, PAN_SPAN.lat),
+          longitudeDelta: Math.min(region.longitudeDelta, PAN_SPAN.lng),
         },
         300,
       );
@@ -143,6 +147,9 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
           <MapPin item={item} order={walkIds.get(item.id)} selected={selectedId === item.id} />
         </Marker>
       ))}
+      {/* Dim everything outside the city limit and outline the limit itself. */}
+      <Polygon coordinates={OUTER} holes={[HOLE]} fillColor="rgba(32, 43, 73, 0.38)" strokeWidth={0} />
+      <Polygon coordinates={HOLE} fillColor="transparent" strokeColor={colors.accent} strokeWidth={3} lineDashPattern={[10, 6]} />
     </MapView>
   );
 }

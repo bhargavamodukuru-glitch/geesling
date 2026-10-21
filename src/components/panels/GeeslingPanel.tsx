@@ -7,6 +7,7 @@ import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { WalkCard } from "@/components/WalkCard";
 import { askGeesling } from "@/lib/api";
+import { OUT_OF_AREA_MESSAGE, mentionsOtherPlace } from "@/lib/area";
 import { MAX_RETRIES, buildRetryRequest, type LatLng, type PlanRequest } from "@/lib/planner";
 import { colors, fonts, text } from "@/lib/theme";
 import { itemTitle, type ChatMessage, type MapItem, type Walk } from "@/lib/types";
@@ -66,6 +67,13 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
     const history = messages;
     setMessages((m) => [...m, userMessage]);
     setDraft("");
+    // A retry's prompt lists venue names ("Paris Texas Bar"), so only fresh requests are checked.
+    if (kind === "new" && mentionsOtherPlace(trimmed)) {
+      setMessages((m) => [...m, { id: nextId(), role: "assistant", text: OUT_OF_AREA_MESSAGE }]);
+      if (initial) onInitialPromptComplete();
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      return;
+    }
     setBusy(true);
     try {
       const reply = await askGeesling({
