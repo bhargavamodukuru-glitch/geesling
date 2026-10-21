@@ -34,22 +34,36 @@ test("spend limits are stated in the guide's prompt and do not turn on the free-
 test("the budget wording fits each vibe: two of us, the group, just me", () => {
   const sentence = (vibe: PlanPreferences["vibe"]) => buildPlanRequest(prefs({ vibe, budget: "u25" }), null).prompt;
   assert.match(sentence("date"), /total spend for the two of us under \$25/);
-  assert.match(sentence("friends"), /total spend for the whole group under \$25/);
+  assert.match(sentence("friends"), /spend per person under \$25/);
   assert.match(sentence("solo"), /Keep my total spend under \$25/);
   assert.doesNotMatch(sentence("solo"), /group|two of us/);
-  assert.doesNotMatch(sentence("date"), /whole group/);
   assert.match(sentence("surprise"), /whole outing/);
 });
 
-test("every vibe has its own budget heading, and none of them claim a group unless it is one", () => {
+test("every vibe has its own budget heading, and none of them claim a group total", () => {
   const headings = Object.values(BUDGET_WORDING).map((w) => w.heading);
   assert.equal(new Set(headings).size, headings.length, "headings are distinct");
   assert.equal(BUDGET_WORDING.date.heading, "BUDGET FOR THE TWO OF YOU");
   assert.equal(BUDGET_WORDING.solo.heading, "YOUR BUDGET");
-  assert.equal(BUDGET_WORDING.friends.heading, "TOTAL BUDGET FOR THE GROUP");
-  for (const [vibe, w] of Object.entries(BUDGET_WORDING)) {
-    if (vibe !== "friends") assert.doesNotMatch(w.heading, /GROUP/, vibe);
-  }
+  assert.equal(BUDGET_WORDING.friends.heading, "BUDGET PER PERSON");
+  for (const [vibe, w] of Object.entries(BUDGET_WORDING)) assert.doesNotMatch(w.heading, /GROUP/, vibe);
+});
+
+test("a spend limit is sent as a hard limit with the people it covers", () => {
+  const date = buildPlanRequest(prefs({ vibe: "date", budget: "u50" }), null);
+  assert.equal(date.budgetLimit, 50);
+  assert.equal(date.partySize, 2, "a date budget covers both people");
+  const friends = buildPlanRequest(prefs({ vibe: "friends", budget: "u25" }), null);
+  assert.equal(friends.budgetLimit, 25);
+  assert.equal(friends.partySize, 1, "friends is per person");
+  assert.equal(buildPlanRequest(prefs({ budget: "free" }), null).budgetLimit, null, "free is enforced by the free-only filter");
+  assert.equal(buildPlanRequest(prefs({ budget: "flexible" }), null).budgetLimit, null);
+});
+
+test("Try another keeps the spend limit", () => {
+  const retry = buildRetryRequest(buildPlanRequest(prefs({ vibe: "date", budget: "u25" }), null), ["The Cups"]);
+  assert.equal(retry.budgetLimit, 25);
+  assert.equal(retry.partySize, 2);
 });
 
 test("free and flexible budgets do not mention a spend limit", () => {

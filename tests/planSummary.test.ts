@@ -47,11 +47,11 @@ test("free stops cost nothing and a plan of only free stops says Free", () => {
   assert.equal(costLine(s.cost), "Free");
 });
 
-test("listed ticket prices are summed as a range and flagged as per ticket", () => {
+test("listed ticket prices are summed as a range, per person", () => {
   const s = summarizePlan(walk([stop(1, event({ price_min: 15, price_max: 25 })), stop(2, event({ id: "e2", price_min: 10, price_max: null }))]));
   assert.equal(s.cost.knownMin, 25);
   assert.equal(s.cost.knownMax, 35);
-  assert.equal(costLine(s.cost), "Tickets $25–$35 each");
+  assert.equal(costLine(s.cost), "$25–$35 per person");
 });
 
 test("price levels are never turned into dollar amounts", () => {
@@ -63,7 +63,7 @@ test("price levels are never turned into dollar amounts", () => {
 
 test("known prices and unknown stops are both stated", () => {
   const s = summarizePlan(walk([stop(1, event({ price_min: 12, price_max: 12 })), stop(2, place({ price_level: "PRICE_LEVEL_INEXPENSIVE" })), stop(3, event({ id: "e3", is_free: true }))]));
-  assert.equal(costLine(s.cost), "Tickets $12 each · 1 stop with no listed price");
+  assert.equal(costLine(s.cost), "$12 per person · 1 stop with no listed price");
 });
 
 test("only events that need a ticket or RSVP are listed under booking", () => {
@@ -84,4 +84,20 @@ test("durations read naturally", () => {
   assert.equal(formatDuration(60), "1 h");
   assert.equal(formatDuration(123), "2 h 3 min");
   assert.equal(formatDuration(-5), "0 min");
+});
+
+test("a place's Google price range counts as a listed price", () => {
+  const s = summarizePlan(walk([stop(1, place({ price_from: 10, price_to: 20 })), stop(2, event({ id: "e2", price_min: 5 }))]));
+  assert.equal(s.cost.pricedStops, 2);
+  assert.equal(costLine(s.cost), "$15–$25 per person");
+});
+
+test("an open-ended place range makes the total a floor", () => {
+  const s = summarizePlan(walk([stop(1, place({ price_from: 100, price_to: null }))]));
+  assert.equal(costLine(s.cost), "$100+ per person");
+});
+
+test("a $$ level alone is still not turned into a dollar amount", () => {
+  const s = summarizePlan(walk([stop(1, place({ price_level: "PRICE_LEVEL_MODERATE" }))]));
+  assert.equal(s.cost.unknownStops, 1);
 });

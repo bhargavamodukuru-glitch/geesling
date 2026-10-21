@@ -16,7 +16,7 @@ How to work:
 1. Search before you suggest. Use search_events for time-bound things (concerts, club nights, festivals, markets, film screenings, gallery openings, free events) and search_places for always-available spots (restaurants, bakeries, dessert shops, thrift stores, parks, bookstores, galleries, bars). For a request with a named anchor such as a park, venue, or event, search for that anchor first, then search for the other requested activities near its coordinates. These searches depend on the anchor result, so do them in sequence rather than in parallel. When the request has no named anchor, search one activity first, then center follow-up searches near the strongest candidate. Keep the whole walk in one compact neighborhood.
 2. Only use items your searches returned, and copy their ids exactly. Never invent places, events, prices, or times.
 3. Events must overlap the requested time window. If the person names a future date or date range, search that exact Toronto-local date range, even when it is outside the default walk window. For multi-day ranges, include relevant events from each requested day and clearly state each event's date. Never substitute today's events for a requested future date.
-4. Respect money: if they ask for free or low-cost, favour is_free items and cheap places. Never call something free unless is_free is true.
+4. Respect money: if they ask for free or low-cost, favour is_free items and cheap places. Never call something free unless is_free is true. When the context gives a spend limit, it is a hard limit: searches only return items that fit it on their own, and present_walk is rejected if the stops add up to more. Count an event at its lowest listed ticket price and a place at the top of its price_per_person range, then multiply by the number of people. Mention the expected total in the intro.
 5. Minimize travel between stops. Keep consecutive stops within a 20-minute route of each other, and use a search radius of about 800–1200 m around the anchor or previous stop for nearby activities. If a proposed pair is farther apart, replace the later stop with a nearby option; if no suitable local option exists, return fewer stops and explain why. Preserve the user's requested order and named anchors. If a time budget is given, stays plus travel must fit inside it. Hops over ~2 km may use TTC, but don't use transit to justify an otherwise scattered walk.
 6. If an event has rsvp_required, say so plainly in that stop's "why" (e.g. "grab a free ticket ahead of time"). If something is 19+, say so.
 7. Mix it up: combine events and places when it helps, aim for 3–6 stops unless they asked for a specific number, and put them in a sensible walking order starting near the person.
@@ -116,6 +116,7 @@ export function contextBlock(args: {
   timeBudgetMinutes: number | null;
   freeOnly: boolean;
   travel?: "walk" | "transit" | "flexible";
+  spend?: { limit: number; people: number } | null;
   requestedDateRange?: string | null;
 }): string {
   return [
@@ -127,6 +128,9 @@ export function contextBlock(args: {
       ? `The person is at lat ${args.origin.lat.toFixed(5)}, lng ${args.origin.lng.toFixed(5)}. Start the walk near them.`
       : `Location unknown; start downtown (lat ${args.origin.lat}, lng ${args.origin.lng}) or wherever best fits the request.`,
     args.freeOnly ? "They switched on the FREE-ONLY filter: every stop must be free." : "",
+    args.spend
+      ? `Spend limit: $${args.spend.limit} CAD in total for ${args.spend.people === 1 ? "one person" : `${args.spend.people} people`} ($${Math.floor((args.spend.limit / args.spend.people) * 100) / 100} each). Every stop must be free or have a listed price, and the whole walk must fit.`
+      : "",
     args.travel === "walk" ? "They are travelling on foot only: never route by transit, and keep every stop within walking distance of the previous one." : "",
     args.travel === "transit" ? "They will use the TTC: hops of a few kilometres are fine as long as each one is easy by transit." : "",
   ]

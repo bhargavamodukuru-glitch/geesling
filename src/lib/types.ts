@@ -39,6 +39,9 @@ export interface PlaceItem {
   lat: number;
   lng: number;
   price_level: string | null;
+  /** Google's per-person price range in CAD. Missing on walks saved before it was added. */
+  price_from?: number | null;
+  price_to?: number | null;
   is_free: boolean;
   involves_alcohol: boolean;
   rating: number | null;

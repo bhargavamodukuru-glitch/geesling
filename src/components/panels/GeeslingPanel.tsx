@@ -84,6 +84,8 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
         startAt: null,
         freeOnly: request?.freeOnly ?? freeOnly,
         travel: request?.travel,
+        budgetLimit: request?.budgetLimit,
+        partySize: request?.partySize,
       });
       setMessages((m) => [...m, { id: nextId(), role: "assistant", text: reply.message, walk: reply.walk, musicCrawlerLink }]);
       if (reply.walk) {

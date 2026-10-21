@@ -1,8 +1,9 @@
 // Geesling guide — turns a prompt into a walk of real Toronto events + places.
-// POST { prompt, history?, origin?, timeBudgetMinutes?, startAt?, freeOnly? }
+// POST { prompt, history?, origin?, timeBudgetMinutes?, startAt?, freeOnly?, travel?, budgetLimit?, partySize? }
 //   → { message, walk | null }
 import Anthropic from "npm:@anthropic-ai/sdk@0.135.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
+import { checkBudget, fitsPerPerson, parseBudget } from "./budget.ts";
 import { contextBlock, MODEL, SYSTEM_PROMPT, TOOLS } from "./prompt.ts";
 import { type MaxPrice, type PlaceItem, searchPlaces } from "./places.ts";
 import { bestLeg, type Leg } from "./routes.ts";
@@ -70,6 +71,9 @@ interface GuideRequest {
   startAt?: string | null;
   freeOnly?: boolean;
   travel?: "walk" | "transit" | "flexible";
+  /** Planner spend limit in CAD for `partySize` people. */
+  budgetLimit?: number | null;
+  partySize?: number;
 }
 
 interface RequestedDateRange {
@@ -217,6 +221,7 @@ function placeForModel(p: PlaceItem) {
     lat: Number(p.lat.toFixed(5)),
     lng: Number(p.lng.toFixed(5)),
     price_level: p.price_level,
+    price_per_person: p.price_from === null ? "not listed" : p.price_to === null ? `${p.price_from}+ CAD` : `${p.price_from}–${p.price_to} CAD`,
     is_free: p.is_free,
     rating: p.rating,
     reviews: p.rating_count,
@@ -233,7 +238,7 @@ function placeForModel(p: PlaceItem) {
   };
 }
 
-async function runSearchEvents(db: SupabaseClient, input: Record<string, unknown>, ctx: { origin: { lat: number; lng: number }; fromIso: string; endIso: string; freeOnly: boolean; requestedDates: boolean }) {
+async function runSearchEvents(db: SupabaseClient, input: Record<string, unknown>, ctx: { origin: { lat: number; lng: number }; fromIso: string; endIso: string; freeOnly: boolean; requestedDates: boolean; perPersonLimit: number | null }) {
   const near = isLatLng(input.near) ? input.near : ctx.origin;
   const { data, error } = await db.rpc("search_events", {
     q: typeof input.query === "string" && input.query.trim() ? input.query.trim() : null,
@@ -243,7 +248,10 @@ async function runSearchEvents(db: SupabaseClient, input: Record<string, unknown
     center_lng: near.lng,
     radius_km: typeof input.radius_km === "number" ? Math.min(input.radius_km, 40) : 6,
     free_only: ctx.freeOnly || input.free_only === true,
-    max_price: typeof input.max_price === "number" ? input.max_price : null,
+    max_price:
+      ctx.perPersonLimit !== null
+        ? Math.min(ctx.perPersonLimit, typeof input.max_price === "number" ? input.max_price : Infinity)
+        : typeof input.max_price === "number" ? input.max_price : null,
     cats: Array.isArray(input.categories) && input.categories.length ? input.categories : null,
     lim: typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 12) : 10,
   });
@@ -345,6 +353,8 @@ Deno.serve(async (req) => {
   const freeOnly = body.freeOnly === true;
   const travel = body.travel === "walk" || body.travel === "transit" ? body.travel : "flexible";
   const allowTransit = travel !== "walk";
+  const spend = parseBudget(body.budgetLimit, body.partySize);
+  const perPersonLimit = spend ? spend.limit / spend.people : null;
 
   const history: Anthropic.Beta.BetaMessageParam[] = (body.history ?? [])
     .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.text === "string" && m.text.trim())
@@ -367,6 +377,7 @@ Deno.serve(async (req) => {
         timeBudgetMinutes: budget,
         freeOnly,
         travel,
+        spend,
         requestedDateRange: targetDates?.label ?? null,
       })}\n\nRequest: ${prompt}`,
     },
@@ -419,7 +430,8 @@ Deno.serve(async (req) => {
                 endIso: end.toISOString(),
                 freeOnly,
                 requestedDates: targetDates !== null,
-              });
+                perPersonLimit,
+              }).then((found) => (perPersonLimit === null ? found : found.filter((e) => fitsPerPerson(e, perPersonLimit))));
               events.forEach((e) => known.set(e.id, e));
               return { type: "tool_result", tool_use_id: tool.id, content: JSON.stringify({ count: events.length, events: events.map(eventForModel) }) };
             }
@@ -433,9 +445,14 @@ Deno.serve(async (req) => {
                 radiusMeters: typeof input.radius_m === "number" ? input.radius_m : 1200,
                 maxPrice: freeOnly ? "inexpensive" : ((["inexpensive", "moderate", "expensive", "any"] as const).find((p) => p === input.max_price) ?? "any") as MaxPrice,
                 openNow: input.open_now === true,
-                limit: typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 10) : 6,
+                // A spend limit filters results afterwards, so ask Google for more to keep enough that fit.
+                limit: perPersonLimit !== null ? 10 : typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 10) : 6,
               });
-              const filtered = freeOnly ? places.filter((p) => p.is_free) : places;
+              const filtered = freeOnly
+                ? places.filter((p) => p.is_free)
+                : perPersonLimit !== null
+                  ? places.filter((p) => fitsPerPerson(p, perPersonLimit))
+                  : places;
               filtered.forEach((p) => known.set(p.id, p)); // kept in memory for this request only: Google's policy does not allow storing Places content beyond place IDs
               return { type: "tool_result", tool_use_id: tool.id, content: JSON.stringify({ count: filtered.length, places: filtered.map(placeForModel) }) };
             }
@@ -452,6 +469,24 @@ Deno.serve(async (req) => {
                   content: `These ids were not returned by a search (or have the wrong kind): ${unknownIds.join(", ")}. Use only ids from search results.`,
                   is_error: true,
                 };
+              }
+              if (spend) {
+                const check = checkBudget(
+                  walk.stops.map((s) => known.get(s.id)!).map((item) => ({ ...item, name: item.kind === "event" ? item.title : item.name })),
+                  spend.limit,
+                  spend.people,
+                );
+                if (!check.fits) {
+                  const why = check.unknown.length
+                    ? `These stops have no listed price, so they can't be counted against the budget: ${check.unknown.join("; ")}.`
+                    : `The listed prices add up to $${check.total} for ${spend.people === 1 ? "one person" : `${spend.people} people`}, over the $${spend.limit} limit.`;
+                  return {
+                    type: "tool_result",
+                    tool_use_id: tool.id,
+                    content: `${why} Swap the priciest stop for a free or cheaper one from your searches, or drop it and present a shorter walk.`,
+                    is_error: true,
+                  };
+                }
               }
               const candidateStops = await buildStops(walk.stops.slice(0, 8), known, origin, start, placesKey, allowTransit);
               const longHops = candidateStops.slice(1).filter((stop) => stop.leg && stop.leg.duration_s > MAX_INTERSTOP_TRAVEL_SECONDS);

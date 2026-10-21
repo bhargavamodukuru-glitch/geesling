@@ -5,13 +5,15 @@ import type { MapItem, Walk } from "./types";
 export interface CostSummary {
   /** Stops that are confirmed free. */
   freeStops: number;
-  /** Stops with a listed ticket price. */
+  /** Stops with a listed price: an event ticket, or a place's per-person range from Google. */
   pricedStops: number;
   /** Stops with no listed price (paid or unknown). Google gives $ levels, not amounts, so these are not guessed. */
   unknownStops: number;
-  /** Sum of the lowest and highest listed ticket prices (per ticket). Zero when nothing is priced. */
+  /** Sum of the lowest and highest listed prices, per person. Zero when nothing is priced. */
   knownMin: number;
   knownMax: number;
+  /** A place's range has no top ("$100+"), so knownMax is a floor. */
+  openEnded: boolean;
   currency: string;
 }
 
@@ -38,7 +40,7 @@ function stopName(item: MapItem): string {
 }
 
 export function summarizePlan(walk: Walk): PlanSummary {
-  const cost: CostSummary = { freeStops: 0, pricedStops: 0, unknownStops: 0, knownMin: 0, knownMax: 0, currency: "CAD" };
+  const cost: CostSummary = { freeStops: 0, pricedStops: 0, unknownStops: 0, knownMin: 0, knownMax: 0, openEnded: false, currency: "CAD" };
   const bookAhead: string[] = [];
   let travelSeconds = 0;
   let stopMinutes = 0;
@@ -56,6 +58,11 @@ export function summarizePlan(walk: Walk): PlanSummary {
       cost.currency = item.currency || cost.currency;
     } else if (item.kind === "place" && item.price_level === "PRICE_LEVEL_FREE") {
       cost.freeStops += 1;
+    } else if (item.kind === "place" && typeof item.price_from === "number") {
+      cost.pricedStops += 1;
+      cost.knownMin += item.price_from;
+      cost.knownMax += item.price_to ?? item.price_from;
+      if (typeof item.price_to !== "number") cost.openEnded = true;
     } else {
       cost.unknownStops += 1;
     }
@@ -98,7 +105,7 @@ export function formatDuration(totalMinutes: number): string {
 const money = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`);
 
 /**
- * One honest line about cost. It only states what is listed: confirmed free stops, listed ticket prices,
+ * One honest line about cost. It only states what is listed: confirmed free stops, listed ticket prices and Google price ranges,
  * and how many stops have no listed price. It never turns a "$$" level into a dollar amount.
  */
 export function costLine(cost: CostSummary): string {
@@ -107,9 +114,11 @@ export function costLine(cost: CostSummary): string {
   if (cost.pricedStops === 0) {
     return unknown === 0 ? "Free" : `Price not listed: ${unknownText}`;
   }
-  const range = cost.knownMin === cost.knownMax ? money(cost.knownMax) : `${money(cost.knownMin)}–${money(cost.knownMax)}`;
-  const tickets = `Tickets ${range} each`;
-  return unknown === 0 ? tickets : `${tickets} · ${unknownText}`;
+  const range = cost.openEnded
+    ? `${money(cost.knownMin)}+`
+    : cost.knownMin === cost.knownMax ? money(cost.knownMax) : `${money(cost.knownMin)}–${money(cost.knownMax)}`;
+  const listed = `${range} per person`;
+  return unknown === 0 ? listed : `${listed} · ${unknownText}`;
 }
 
 export function travelLine(summary: PlanSummary): string {

@@ -35,6 +35,10 @@ export interface PlanRequest {
   travel?: TravelChoice;
   /** The choices behind a planner request, so "Adjust" can reopen the planner with them filled in. */
   prefs?: PlanPreferences;
+  /** Spend limit in CAD for everyone covered by `partySize`; the server rejects walks that go over it. */
+  budgetLimit?: number | null;
+  /** How many people the budget covers. */
+  partySize?: number;
 }
 
 interface Option<T extends string> {
@@ -81,9 +85,9 @@ export const BUDGET_WORDING: Record<Vibe, { heading: string; note: string; limit
     limit: (n) => `Keep the total spend for the two of us under $${n}, counting tickets, food and drinks.`,
   },
   friends: {
-    heading: "TOTAL BUDGET FOR THE GROUP",
-    note: "Counts tickets, food and drinks for everyone together.",
-    limit: (n) => `Keep the total spend for the whole group under $${n}, counting tickets, food and drinks.`,
+    heading: "BUDGET PER PERSON",
+    note: "Counts each person's tickets, food and drinks.",
+    limit: (n) => `Keep the spend per person under $${n}, counting tickets, food and drinks.`,
   },
   solo: {
     heading: "YOUR BUDGET",
@@ -111,6 +115,9 @@ export const BUDGET_WORDING: Record<Vibe, { heading: string; note: string; limit
     limit: (n) => `Keep the total spend for the whole outing under $${n}, counting tickets, food and drinks.`,
   },
 };
+
+/** How many people a budget covers: a date is two, everything else is counted per person. */
+export const PARTY_SIZE: Record<Vibe, number> = { date: 2, friends: 1, solo: 1, new: 1, chill: 1, culture: 1, surprise: 1 };
 
 function budgetSentence(budget: { id: BudgetChoice; amount: number | null }, vibe: Vibe): string {
   if (budget.id === "free") return "Only free things.";
@@ -188,6 +195,8 @@ export function buildPlanRequest(prefs: PlanPreferences, userLocation: LatLng | 
     origin,
     travel: prefs.travel,
     prefs,
+    budgetLimit: budget.amount !== null && budget.amount > 0 ? budget.amount : null,
+    partySize: PARTY_SIZE[prefs.vibe],
   };
 }
 

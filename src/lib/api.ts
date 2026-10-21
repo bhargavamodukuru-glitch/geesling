@@ -47,6 +47,8 @@ export interface GuideInput {
   startAt: string | null;
   freeOnly: boolean;
   travel?: TravelChoice;
+  budgetLimit?: number | null;
+  partySize?: number;
 }
 
 export interface GuideReply {
@@ -65,6 +67,8 @@ export async function askGeesling(input: GuideInput): Promise<GuideReply> {
       startAt: input.startAt,
       freeOnly: input.freeOnly,
       travel: input.travel,
+      budgetLimit: input.budgetLimit ?? null,
+      partySize: input.partySize ?? 1,
     },
   });
   if (error) {

@@ -79,6 +79,11 @@ function formatMoney(n: number): string {
 
 function placePrice(place: PlaceItem): string {
   if (place.is_free) return "Free";
+  if (typeof place.price_from === "number") {
+    const from = `$${formatMoney(place.price_from)}`;
+    if (typeof place.price_to !== "number") return `${from}+ pp`;
+    return place.price_to === place.price_from ? `${from} pp` : `${from}–$${formatMoney(place.price_to)} pp`;
+  }
   switch (place.price_level) {
     case "PRICE_LEVEL_INEXPENSIVE":
       return "$";

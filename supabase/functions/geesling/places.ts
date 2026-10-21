@@ -11,6 +11,9 @@ export interface PlaceItem {
   lat: number;
   lng: number;
   price_level: string | null;
+  /** Google's per-person price range in CAD, when listed. `price_to` is null for open-ended ranges ("$100+"). */
+  price_from: number | null;
+  price_to: number | null;
   is_free: boolean;
   involves_alcohol: boolean;
   rating: number | null;
@@ -32,6 +35,19 @@ interface GoogleReview {
   googleMapsUri?: string;
 }
 
+interface GoogleMoney {
+  currencyCode?: string;
+  units?: string;
+  nanos?: number;
+}
+
+/** A Google Money value in CAD, or null when missing or in another currency. */
+function cad(money: GoogleMoney | undefined): number | null {
+  if (!money || money.currencyCode !== "CAD" || money.units === undefined) return null;
+  const value = Number(money.units) + (money.nanos ?? 0) / 1e9;
+  return Number.isFinite(value) ? value : null;
+}
+
 interface GooglePlace {
   id: string;
   displayName?: { text?: string };
@@ -40,6 +56,7 @@ interface GooglePlace {
   types?: string[];
   primaryType?: string;
   priceLevel?: string;
+  priceRange?: { startPrice?: GoogleMoney; endPrice?: GoogleMoney };
   rating?: number;
   userRatingCount?: number;
   websiteUri?: string;
@@ -59,6 +76,7 @@ const BASE_FIELD_MASK = [
   "places.types",
   "places.primaryType",
   "places.priceLevel",
+  "places.priceRange",
   "places.rating",
   "places.userRatingCount",
   "places.websiteUri",
@@ -125,6 +143,8 @@ export function toPlaceItem(p: GooglePlace): PlaceItem | null {
     lat: p.location.latitude,
     lng: p.location.longitude,
     price_level: p.priceLevel ?? null,
+    price_from: cad(p.priceRange?.startPrice),
+    price_to: cad(p.priceRange?.endPrice),
     is_free: p.priceLevel === "PRICE_LEVEL_FREE" || (!p.priceLevel && types.some((t) => FREE_TYPES.has(t))),
     involves_alcohol: types.some((t) => ALCOHOL_TYPES.has(t)),
     rating: p.rating ?? null,
