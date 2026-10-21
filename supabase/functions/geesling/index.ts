@@ -3,9 +3,9 @@
 //   → { message, walk | null }
 import Anthropic from "npm:@anthropic-ai/sdk@0.135.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
-import { checkBudget, fitsPerPerson, parseBudget } from "./budget.ts";
+import { checkBudget, fitsPerPerson, parseBudget, statedBudget } from "./budget.ts";
 import { dayPart, notBefore } from "./daytime.ts";
-import { relativeDay, requestedStart, torontoDay } from "./when.ts";
+import { dayPartMinutes, relativeDay, requestedStart, torontoDay } from "./when.ts";
 import { leavesTooMuchTime, minutesLeftTonight, statedDuration } from "./fill.ts";
 import { contextBlock, MODEL, SYSTEM_PROMPT, TOOLS } from "./prompt.ts";
 import { type MaxPrice, type PlaceItem, searchPlaces } from "./places.ts";
@@ -382,7 +382,8 @@ Deno.serve(async (req) => {
   const start = askedStart ?? clientStart ?? (targetDates ? new Date(Math.max(targetDates.from.getTime(), now.getTime())) : now);
   // The time chips win; with "Any time", a duration written in the message ("12 hours") is used instead.
   const chipBudget = typeof body.timeBudgetMinutes === "number" && body.timeBudgetMinutes > 0 ? Math.min(body.timeBudgetMinutes, 16 * 60) : null;
-  const budget = chipBudget ?? statedDuration(prompt);
+  // Then a duration in the message ("12 hours"), then the end of a named part of the day ("afternoon" ends at 4 pm).
+  const budget = chipBudget ?? statedDuration(prompt) ?? dayPartMinutes(prompt, start);
   // Late in the day only the hours until most places close can be planned; the guide says so.
   const leftTonight = targetDates ? null : minutesLeftTonight(start);
   const usable = budget !== null && leftTonight !== null && leftTonight < budget ? Math.max(leftTonight, 0) : budget;
@@ -392,7 +393,8 @@ Deno.serve(async (req) => {
   const freeOnly = body.freeOnly === true;
   const travel = body.travel === "walk" || body.travel === "transit" ? body.travel : "flexible";
   const allowTransit = travel !== "walk";
-  const spend = parseBudget(body.budgetLimit, body.partySize);
+  // The planner's budget buttons win; otherwise a budget typed in the message ("under $50") is just as binding.
+  const spend = parseBudget(body.budgetLimit, body.partySize) ?? statedBudget(prompt);
   const perPersonLimit = spend ? spend.limit / spend.people : null;
 
   // Untrusted input: anything that isn't a list of {role, text} objects is ignored rather than crashing the request.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { relativeDay, requestedClock, requestedStart, torontoTime } from "../supabase/functions/geesling/when.ts";
+import { dayPart, dayPartMinutes, relativeDay, requestedClock, requestedStart, torontoTime } from "../supabase/functions/geesling/when.ts";
 
 // Tuesday 2026-10-20, 9:04 pm in Toronto (EDT, UTC-4).
 const NOW = new Date("2026-10-21T01:04:00Z");
@@ -51,4 +51,41 @@ test("today with no time, or a time already passed, means now", () => {
 
 test("Toronto times survive the switch back to standard time", () => {
   assert.equal(torontoTime({ year: 2026, month: 10, day: 2 }, 12 * 60).toISOString(), "2026-11-02T17:00:00.000Z", "EST is UTC-5");
+});
+
+test("parts of the day: night from 5 pm, evening from 4 pm, afternoon noon to 4, morning 8 to noon", () => {
+  assert.equal(dayPart("date night, under $50")?.start, 17 * 60);
+  assert.equal(dayPart("friday night drinks")?.start, 17 * 60);
+  assert.equal(dayPart("something fun tonight")?.start, 17 * 60);
+  assert.equal(dayPart("a chill evening")?.start, 16 * 60);
+  assert.deepEqual(dayPart("lazy afternoon"), { name: "afternoon", start: 12 * 60, end: 16 * 60 });
+  assert.deepEqual(dayPart("saturday morning coffee"), { name: "morning", start: 8 * 60, end: 12 * 60 });
+  assert.equal(dayPart("nightlife and bars"), null, "nightlife is not a time");
+  assert.equal(dayPart("cheap dumplings"), null);
+});
+
+// Wednesday 2026-10-21, 9:46 am in Toronto: when the date-night request came in.
+const MORNING = new Date("2026-10-21T13:46:00Z");
+
+test("'date night' asked in the morning starts at 5 pm today, not now", () => {
+  assert.equal(requestedStart("date night, under $50, downtown", MORNING, relativeDay("date night", MORNING))?.toISOString(), local("2026-10-21T17:00:00"));
+});
+
+test("inside the part of the day it starts now; after it, a dinner time still wins", () => {
+  const eightPm = new Date("2026-10-22T00:00:00Z");
+  assert.equal(requestedStart("date night", eightPm, null), null, "already night: start now");
+  assert.equal(requestedStart("evening walk", new Date("2026-10-21T21:00:00Z"), null), null, "5 pm is evening");
+  assert.equal(requestedStart("dinner date tonight", MORNING, null)?.toISOString(), local("2026-10-21T18:00:00"), "dinner beats night");
+});
+
+test("a morning asked for after it's over means tomorrow morning", () => {
+  const twoPm = new Date("2026-10-21T18:00:00Z");
+  assert.equal(requestedStart("a slow morning", twoPm, null)?.toISOString(), local("2026-10-22T08:00:00"));
+});
+
+test("a bounded part of the day limits how long the walk runs", () => {
+  assert.equal(dayPartMinutes("lazy afternoon", new Date(local("2026-10-21T12:00:00"))), 240);
+  assert.equal(dayPartMinutes("lazy afternoon", new Date(local("2026-10-21T14:30:00"))), 90);
+  assert.equal(dayPartMinutes("date night", new Date(local("2026-10-21T17:00:00"))), null, "night runs until things close");
+  assert.equal(dayPartMinutes("afternoon at 2pm", new Date(local("2026-10-21T14:00:00"))), null, "a clock time means no part limit");
 });

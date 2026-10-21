@@ -52,3 +52,28 @@ export function parseBudget(limit: unknown, people: unknown): { limit: number; p
   const count = typeof people === "number" && Number.isInteger(people) && people >= 1 && people <= 20 ? people : 1;
   return { limit, people: count };
 }
+
+const WORD_COUNT: Record<string, number> = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8 };
+
+/**
+ * A spend limit typed into the chat ("under $50", "$30 budget", "max $40 each"), enforced like the planner's.
+ * "date", "for two" or "the two of us" covers two people; "for 4" four. A per-person phrase ("each", "pp")
+ * multiplies the limit by the people. Null when no amount is named.
+ */
+export function statedBudget(prompt: string): { limit: number; people: number } | null {
+  const text = prompt.toLowerCase();
+  const amount =
+    /\b(?:under|below|less than|max(?:imum)?|up to|no more than|within|at most)\s*(?:of\s*)?\$\s?(\d{1,4})\b/.exec(text) ??
+    /\$\s?(\d{1,4})\s*(?:budget|max|or less|tops|total)\b/.exec(text) ??
+    /\bbudget\s*(?:of|is|:)?\s*\$\s?(\d{1,4})\b/.exec(text);
+  if (!amount) return null;
+  const n = /\bfor (\d{1,2}|two|three|four|five|six|seven|eight)\b(?! hours?| hrs?| min)/.exec(text);
+  const people = n
+    ? Number(n[1]) || WORD_COUNT[n[1]]
+    : /\b(date|two of us|both of us|couple|my partner|my (?:girl|boy)friend|my wife|my husband)\b/.test(text)
+      ? 2
+      : 1;
+  const perPerson = /\b(each|per person|pp|a head|per head)\b/.test(text);
+  const limit = Number(amount[1]) * (perPerson ? people : 1);
+  return parseBudget(limit, people);
+}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { checkBudget, fitsPerPerson, parseBudget, perPersonCost } from "../supabase/functions/geesling/budget.ts";
+import { checkBudget, fitsPerPerson, parseBudget, perPersonCost, statedBudget } from "../supabase/functions/geesling/budget.ts";
 
 const freePark = { kind: "place" as const, is_free: true, name: "Trinity Bellwoods" };
 const cafe = { kind: "place" as const, is_free: false, price_to: 20, name: "The Cups" };
@@ -46,4 +46,14 @@ test("odd budget input means no budget, and the headcount defaults to one", () =
   assert.deepEqual(parseBudget(25, undefined), { limit: 25, people: 1 });
   assert.deepEqual(parseBudget(50, 2), { limit: 50, people: 2 });
   assert.deepEqual(parseBudget(50, 2.5), { limit: 50, people: 1 });
+});
+
+test("typed budgets become a hard limit with the people they cover", () => {
+  assert.deepEqual(statedBudget("date night, under $50, downtown or lesliville area."), { limit: 50, people: 2 });
+  assert.deepEqual(statedBudget("cheap eats under $20"), { limit: 20, people: 1 });
+  assert.deepEqual(statedBudget("$30 budget for two"), { limit: 30, people: 2 });
+  assert.deepEqual(statedBudget("max $25 each, for 4 of us"), { limit: 100, people: 4 }, "per person times people");
+  assert.deepEqual(statedBudget("budget of $40"), { limit: 40, people: 1 });
+  assert.equal(statedBudget("a fancy dinner, money is no object"), null);
+  assert.equal(statedBudget("free stuff for 2 hours"), null);
 });

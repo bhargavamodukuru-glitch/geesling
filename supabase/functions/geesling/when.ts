@@ -70,8 +70,30 @@ const MEALS: Array<[RegExp, number]> = [
   [/\bbrunch\b/, 11 * 60],
   [/\blunch\b/, 12 * 60],
   [/\b(dinner|supper)\b/, 18 * 60],
-  [/\btonight\b|\bthis evening\b/, 19 * 60],
 ];
+
+export interface DayPart {
+  name: "morning" | "afternoon" | "evening" | "night";
+  /** Minutes after midnight. */
+  start: number;
+  /** Where the part ends, or null for "until things close" (the 2 am cutoff applies). */
+  end: number | null;
+}
+
+// Night is after standard work hours (5 pm on), evening anything after 4 pm, afternoon noon to 3:59 pm.
+const DAY_PARTS: Array<[RegExp, DayPart]> = [
+  [/\bmornings?\b/, { name: "morning", start: 8 * 60, end: 12 * 60 }],
+  [/\bafternoons?\b/, { name: "afternoon", start: 12 * 60, end: 16 * 60 }],
+  [/\bevenings?\b/, { name: "evening", start: 16 * 60, end: null }],
+  [/\b(tonight|nights?)\b/, { name: "night", start: 17 * 60, end: null }],
+];
+
+/** The part of the day the person named ("date night", "saturday morning"), or null. */
+export function dayPart(prompt: string): DayPart | null {
+  const text = prompt.toLowerCase();
+  for (const [pattern, part] of DAY_PARTS) if (pattern.test(text)) return part;
+  return null;
+}
 
 /**
  * A time of day the person named, in minutes after midnight: "at 12pm", "7:30 pm", "noon", "at 7" (read as 7 pm),
@@ -101,16 +123,36 @@ export function requestedClock(prompt: string): number | null {
 /** When a future day is named without a time, the walk starts at this time instead of midnight. */
 export const DEFAULT_START_MINUTES = 10 * 60;
 
+const sameDay = (a: DayKey, b: DayKey) => a.year === b.year && a.month === b.month && a.day === b.day;
+
 /**
- * Where the walk should start. A named time wins; a named future day with no time starts at 10 am;
- * a time that has already passed today falls back to now.
+ * Where the walk should start, or null for "now". A clock time or meal wins, then a part of the day;
+ * a named future day with neither starts at 10 am. Inside today's part of the day it starts now; once that
+ * part is over (asking for "morning" at 2 pm, with no day named) it moves to tomorrow.
  */
 export function requestedStart(prompt: string, now: Date, day: DayKey | null): Date | null {
   const clock = requestedClock(prompt);
+  const part = dayPart(prompt);
   const today = torontoDay(now);
   const target = day ?? today;
-  const isToday = target.year === today.year && target.month === today.month && target.day === today.day;
-  if (clock === null) return isToday ? null : torontoTime(target, DEFAULT_START_MINUTES);
-  const at = torontoTime(target, clock);
-  return at.getTime() > now.getTime() ? at : null;
+  const startMinutes = clock ?? part?.start ?? null;
+  if (startMinutes === null) return sameDay(target, today) ? null : torontoTime(target, DEFAULT_START_MINUTES);
+  const at = torontoTime(target, startMinutes);
+  if (at.getTime() > now.getTime()) return at;
+  if (clock === null && part?.end != null && !day && torontoTime(today, part.end).getTime() <= now.getTime()) {
+    return torontoTime(addDays(today, 1), part.start);
+  }
+  return null;
+}
+
+/**
+ * How long the walk can run when only a bounded part of the day was named ("afternoon" ends at 4 pm),
+ * in minutes from `start`. Null when there's no such limit (a clock time, evening, night, or nothing).
+ */
+export function dayPartMinutes(prompt: string, start: Date): number | null {
+  if (requestedClock(prompt) !== null) return null;
+  const part = dayPart(prompt);
+  if (part?.end == null) return null;
+  const minutes = Math.round((torontoTime(torontoDay(start), part.end).getTime() - start.getTime()) / 60_000);
+  return Math.max(minutes, 30);
 }
