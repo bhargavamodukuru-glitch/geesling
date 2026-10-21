@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Goose } from "@/components/Goose";
 import { GeeslingWelcome } from "@/components/GeeslingWelcome";
@@ -57,16 +57,10 @@ function Home() {
   const [teamNote, setTeamNote] = useState<string | null>(null);
   useEffect(() => {
     if (!team) return;
-    // Take the code out of the address bar. Navigation isn't ready on the first render, so on the web do it directly.
-    if (Platform.OS === "web" && typeof window !== "undefined") window.history.replaceState(null, "", window.location.pathname);
     joinTeam(team)
       .then((ok) => {
-        // The router keeps its own copy of the URL; clear the code there too now that navigation is ready.
-        try {
-          router.setParams({ team: undefined });
-        } catch {
-          // Not mounted yet on some first loads; the code just stays in the address bar.
-        }
+        // Take the code out of the address bar once the check is done, so a copied link doesn't carry it.
+        if (Platform.OS === "web" && typeof window !== "undefined") window.history.replaceState(window.history.state, "", window.location.pathname);
         return ok;
       })
       .then((ok) => setTeamNote(ok ? "This device is marked as team. Its requests show in yellow in the usage sheet." : "That team link didn't work."))
