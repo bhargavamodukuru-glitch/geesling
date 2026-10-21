@@ -98,6 +98,10 @@ export interface WalkStop {
 }
 
 export interface Walk {
+  /** "run" for a running route ("I want to run a 15k"); missing on routes saved before runs existed. */
+  activity?: "walk" | "run";
+  run_target_km?: number | null;
+  run_pace_min_per_km?: number | null;
   id: string;
   prompt: string;
   title: string;

@@ -5,6 +5,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.135.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 import { checkBudget, fitsPerPerson, parseBudget, statedBudget } from "./budget.ts";
 import { dayPart, notBefore } from "./daytime.ts";
+import { runDistanceFits, runRequest, runSeconds, type RunRequest } from "./run.ts";
 import { dayPartMinutes, relativeDay, requestedStart, torontoDay } from "./when.ts";
 import { leavesTooMuchTime, minutesLeftTonight, statedDuration } from "./fill.ts";
 import { contextBlock, MODEL, SYSTEM_PROMPT, TOOLS } from "./prompt.ts";
@@ -20,6 +21,14 @@ const LONG_MAX_TURNS = 11;
 const WRAP_UP_TURNS_LEFT = 2;
 const MAX_INTERSTOP_TRAVEL_SECONDS = 20 * 60;
 const MAX_PART_CHANGE_TRAVEL_SECONDS = 40 * 60;
+// A running route is sent back at most this many times for distance before the closest attempt is used.
+const MAX_RUN_RETRIES = 2;
+
+function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const rad = Math.PI / 180;
+  const h = Math.sin(((b.lat - a.lat) * rad) / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(((b.lng - a.lng) * rad) / 2) ** 2;
+  return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+}
 const HOURLY_LIMIT = Number(Deno.env.get("GUIDE_HOURLY_LIMIT") ?? 20);
 // Anonymous accounts are free to create, so the per-person limit alone can't cap spend: this caps everyone together.
 const DAILY_LIMIT = Number(Deno.env.get("GUIDE_DAILY_LIMIT") ?? 300);
@@ -289,16 +298,19 @@ async function buildStops(
   routesKey: string | null,
   allowTransit: boolean,
   meter?: RouteMeter,
+  run?: RunRequest | null,
 ): Promise<WalkStop[]> {
   const stops: WalkStop[] = [];
   let cursor = start;
   let previous: { lat: number; lng: number } | null = origin;
   for (const [index, stop] of chosen.entries()) {
     const item = known.get(stop.id)!;
-    const leg = previous ? await bestLeg(routesKey, previous, item, cursor, allowTransit, meter) : null;
+    const routed = previous ? await bestLeg(routesKey, previous, item, cursor, allowTransit, meter) : null;
+    // On a run, each leg takes running time at their pace, not walking time.
+    const leg = routed && run ? { ...routed, duration_s: runSeconds(routed.distance_m, run.paceMinPerKm) } : routed;
     // A stop can ask not to start before a set time (dinner from 17:30); the walk waits until then.
     let arrive = notBefore(new Date(cursor.getTime() + (leg?.duration_s ?? 0) * 1000), stop.arrive_after);
-    let stay = Math.max(10, Math.min(stop.stay_minutes, 240));
+    let stay = Math.max(run ? 1 : 10, Math.min(stop.stay_minutes, 240)); // a run passes waypoints in a minute
     if (item.kind === "event") {
       const startsAt = new Date(item.next_start);
       const endsAt = new Date(item.next_end);
@@ -432,7 +444,9 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
   const searchOrigin = origin ?? DOWNTOWN;
   const freeOnly = body.freeOnly === true;
   const travel = body.travel === "walk" || body.travel === "transit" ? body.travel : "flexible";
-  const allowTransit = travel !== "walk";
+  // "I want to run a 15k": a running route of about that distance, on foot the whole way.
+  const run = runRequest(prompt);
+  const allowTransit = !run && travel !== "walk";
   // The planner's budget buttons win; otherwise a budget typed in the message ("under $50") is just as binding.
   const spend = parseBudget(body.budgetLimit, body.partySize, body.budgetMin) ?? statedBudget(prompt);
   const perPersonLimit = spend ? spend.limit / spend.people : null;
@@ -461,6 +475,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
         freeOnly,
         travel,
         spend,
+        run,
         requestedDateRange: targetDates?.label ?? null,
         startLabel: askedStart ? torontoLabel(askedStart) : null,
       })}\n\nRequest: ${prompt}`,
@@ -473,6 +488,8 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
   let presented: PresentWalkInput | null = null;
   let validatedStops: WalkStop[] | null = null;
   let askedToFill = false;
+  let runRetries = 0;
+  let bestRun: { walk: PresentWalkInput; stops: WalkStop[]; miss: number; meters: number } | null = null;
   // The best walk the guide built but we sent back, used if it runs out of turns before presenting another.
   let fallback: { walk: PresentWalkInput; stops: WalkStop[] } | null = null;
   const longOuting = usable !== null && usable >= LONG_OUTING_MINUTES;
@@ -576,8 +593,39 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
                   return { type: "tool_result", tool_use_id: tool.id, content, is_error: true };
                 }
               }
-              const candidateStops = await buildStops(walk.stops.slice(0, 8), known, origin, start, placesKey, allowTransit, meter.route);
+              // A loop run always closes: the run back to the first waypoint is added and counted in the distance.
+              const firstStop = walk.stops[0];
+              if (run?.loop && walk.stops.length > 1 && walk.stops[walk.stops.length - 1].id !== firstStop.id) {
+                walk.stops = [...walk.stops.slice(0, 7), { ...firstStop, why: "Back where you started.", stay_minutes: 1, arrive_after: undefined }];
+              }
+              const candidateStops = await buildStops(walk.stops.slice(0, 8), known, origin, start, placesKey, allowTransit, meter.route, run);
               // Moving on to a new part of the day (or to a timed meal) may take longer than a hop within one area.
+              if (run) {
+                // A run is judged by distance (and, for a loop, ending near the start), not by hops between stops.
+                const meters = candidateStops.reduce((sum, stop) => sum + (stop.leg?.distance_m ?? 0), 0);
+                const first = origin ?? (candidateStops[0] ? { lat: candidateStops[0].item.lat, lng: candidateStops[0].item.lng } : null);
+                const last = candidateStops[candidateStops.length - 1]?.item;
+                const loopGap = run.loop && first && last ? metersBetween(first, last) : 0;
+                const fits = runDistanceFits(meters, run.distanceKm) && loopGap <= 1500;
+                const miss = Math.abs(meters / 1000 - run.distanceKm) + loopGap / 1000;
+                if (!bestRun || miss < bestRun.miss) bestRun = { walk, stops: candidateStops, miss, meters };
+                if (!fits && runRetries < MAX_RUN_RETRIES) {
+                  runRetries += 1;
+                  const km = (meters / 1000).toFixed(1);
+                  const content = !runDistanceFits(meters, run.distanceKm)
+                    ? `This running route is ${km} km; they asked for about ${run.distanceKm} km (within ${Math.round(run.distanceKm * 0.15 * 10) / 10} km either way). ${meters / 1000 < run.distanceKm ? "Add waypoints further along (parks, trails, waterfront, landmarks)" : "Drop or move waypoints closer together"}, then present again.`
+                    : `They asked for a loop, but the route ends ${(loopGap / 1000).toFixed(1)} km from where it starts. Finish near the start, then present again.`;
+                  return { type: "tool_result", tool_use_id: tool.id, content, is_error: true };
+                }
+                // Out of retries: use the closest attempt, and say plainly how far off it is.
+                const chosen = fits ? { walk, stops: candidateStops, meters } : bestRun!;
+                const off = !runDistanceFits(chosen.meters, run.distanceKm);
+                validatedStops = chosen.stops;
+                presented = off
+                  ? { ...chosen.walk, intro: `Heads up: the closest route I could find is ${(chosen.meters / 1000).toFixed(1)} km, not quite the ${run.distanceKm} km you asked for. ${chosen.walk.intro}` }
+                  : chosen.walk;
+                return { type: "tool_result", tool_use_id: tool.id, content: "Route presented." };
+              }
               const longHops = candidateStops.slice(1).filter((stop, i) => {
                 const prev = candidateStops[i];
                 const newPart = Boolean(walk.stops[i + 1]?.arrive_after) || dayPart(new Date(prev.leave_at)) !== dayPart(new Date(stop.arrive_at));
@@ -643,7 +691,12 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
     throw error;
   }
 
-  // Assigned inside the tool callbacks, so TypeScript can't see that it may be set here.
+  // Assigned inside the tool callbacks, so TypeScript can't see that they may be set here.
+  const closestRun = bestRun as { walk: PresentWalkInput; stops: WalkStop[]; miss: number; meters: number } | null;
+  if (!presented && run && closestRun) {
+    presented = { ...closestRun.walk, intro: `Heads up: the closest route I could find is ${(closestRun.meters / 1000).toFixed(1)} km. ${closestRun.walk.intro}` };
+    validatedStops = closestRun.stops;
+  }
   const leftover = fallback as { walk: PresentWalkInput; stops: WalkStop[] } | null;
   if (!presented && leftover) {
     console.warn("out of turns; presenting the fallback walk", { stops: leftover.stops.length });
@@ -656,7 +709,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
   }
 
   const chosen = (presented as PresentWalkInput).stops.slice(0, 8);
-  const stops = validatedStops ?? await buildStops(chosen, known, origin, start, placesKey, allowTransit, meter.route);
+  const stops = validatedStops ?? await buildStops(chosen, known, origin, start, placesKey, allowTransit, meter.route, run);
   // Google review content is transient evidence for ranking; keep only the
   // permanent place ID and derived recommendation in the stored walk.
   const safeStops = stops.map((stop) => {
@@ -674,6 +727,9 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
     intro: (presented as PresentWalkInput).intro,
     outro: (presented as PresentWalkInput).outro,
     time_budget_minutes: budget,
+    activity: run ? "run" : "walk",
+    run_target_km: run?.distanceKm ?? null,
+    run_pace_min_per_km: run?.paceMinPerKm ?? null,
     start_lat: origin?.lat ?? null,
     start_lng: origin?.lng ?? null,
     stops: safeStops,

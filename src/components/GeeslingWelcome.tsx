@@ -19,6 +19,7 @@ const SAMPLES = [
   "im bored and want a sweet treat, then I just want to see whats happening",
   "i have a date soon and need some cute ideas, maybe a good dinner spot followed by ice cream",
   "free stuff to do with friends tonight, nothing too loud",
+  "i want to run a 15k, suggest a route through the city",
   "rainy afternoon: a cozy café, a bookstore and maybe a gallery",
   "in town for the day, cheap eats and the best views",
 ];
@@ -216,7 +217,7 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation }: Props) {
             <Reveal show={ready} delay={650}>
               <View style={styles.sendRow}>
                 <PixelButton label="Surprise me" icon="🎲" onPress={surprise} />
-                <PixelButton label="Find my walk" tone="red" disabled={!prompt.trim()} onPress={submit} />
+                <PixelButton label="Find my route" tone="red" disabled={!prompt.trim()} onPress={submit} />
               </View>
             </Reveal>
           </View>
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
   conversation: { gap: 20 },
   greeting: { gap: 5, padding: 16, backgroundColor: colors.paper, alignItems: "center" },
   centered: { textAlign: "center" },
-  // Smaller than "Surprise me" and "Find my walk": the map is the secondary path here.
+  // Smaller than "Surprise me" and "Find my route": the map is the secondary path here.
   skipButton: { alignSelf: "center" },
   composerBubble: { width: "100%", minHeight: 96, backgroundColor: colors.gold, borderWidth: 3, borderColor: colors.ink, borderRadius: 16, borderBottomRightRadius: 3, paddingHorizontal: 10, paddingVertical: 8 },
   honk: { fontFamily: fonts.heading, fontSize: 19, color: colors.accent },

@@ -21,7 +21,7 @@ const VIBES: { label: string; icon: string; prompt: string }[] = [
   { label: "Free stuff", icon: "🆓", prompt: "Only free things: what can I do around Toronto today without spending a cent?" },
   { label: "Live music tonight", icon: "🎸", prompt: "Where can I catch live music tonight, plus a good spot to eat nearby first?" },
   { label: "Night out", icon: "🪩", prompt: "Plan a fun night out: dinner, a show or club night, and somewhere for a late snack." },
-  { label: "First time in Toronto", icon: "🧳", prompt: "I'm a tourist here for one day. Give me a walk that shows the real Toronto, not just the CN Tower." },
+  { label: "First time in Toronto", icon: "🧳", prompt: "I'm a tourist here for one day. Give me a route that shows the real Toronto, not just the CN Tower." },
 ];
 
 const BUDGETS: { label: string; minutes: number | null }[] = [

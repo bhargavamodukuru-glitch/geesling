@@ -34,7 +34,7 @@ export function openWalkInMaps(walk: Walk): void {
 /** Native share sheet; on desktop browsers without Web Share, copies the link. Returns "copied" when it did. */
 export async function shareWalk(walk: Walk): Promise<"shared" | "copied"> {
   const url = walkUrl(walk);
-  const message = `${walk.title} — a Toronto walk by Geesling the goose ${url}`;
+  const message = `${walk.title} — a Toronto route by Geesling the goose ${url}`;
   if (Platform.OS === "web") {
     const nav = globalThis.navigator as Navigator | undefined;
     if (nav?.share) {

@@ -32,7 +32,7 @@ export function SavedPanel({ onSelect, onShowWalk }: Props) {
       ListEmptyComponent={
         <View style={styles.empty}>
           <Goose size={4} walking={false} />
-          <Text style={text.body}>No saved spots yet. Tap ☆ on any pin or walk to keep it here.</Text>
+          <Text style={text.body}>No saved spots yet. Tap ☆ on any pin or route to keep it here.</Text>
         </View>
       }
       renderItem={({ item: entry }) => {

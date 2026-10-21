@@ -5,7 +5,7 @@ import { useSaved } from "@/hooks/useSaved";
 import { clock, distance, minutes, priceLabel } from "@/lib/format";
 import { openWalkInMaps, shareWalk } from "@/lib/links";
 import { DAY_PART_LABEL, SPLIT_WALK_MINUTES, dayPart } from "@/lib/dayParts";
-import { costLine, formatDuration, summarizePlan, travelLine } from "@/lib/planSummary";
+import { costLine, formatDuration, runLine, summarizePlan, travelLine } from "@/lib/planSummary";
 import { isTopRated } from "@/lib/placeBadges";
 import { transitLabel, transitSteps } from "@/lib/transit";
 import { colors, fonts, text } from "@/lib/theme";
@@ -23,7 +23,8 @@ export function WalkCard({ walk, onShowOnMap, onSelectStop }: Props) {
   const saved = isSaved("walk", walk.id);
   const summary = useMemo(() => summarizePlan(walk), [walk]);
   // Long walks are shown in parts of the day, with a header wherever the part changes.
-  const split = summary.totalMinutes >= SPLIT_WALK_MINUTES;
+  const isRun = walk.activity === "run";
+  const split = !isRun && summary.totalMinutes >= SPLIT_WALK_MINUTES;
 
   return (
     <Panel tone="parchment" style={styles.card}>
@@ -32,10 +33,13 @@ export function WalkCard({ walk, onShowOnMap, onSelectStop }: Props) {
         <Text style={styles.summaryTitle}>
           ⏱️ {formatDuration(summary.totalMinutes)} total · {summary.stops} stop{summary.stops === 1 ? "" : "s"}
         </Text>
-        <Text style={text.small}>
-          {travelLine(summary)} · {formatDuration(summary.stopMinutes)} at stops
-          {summary.waitMinutes ? ` · about ${formatDuration(summary.waitMinutes)} of free time between stops` : ""}
-        </Text>
+        {isRun ? <Text style={styles.summaryRow}>{runLine(walk)}</Text> : null}
+        {isRun ? null : (
+          <Text style={text.small}>
+            {travelLine(summary)} · {formatDuration(summary.stopMinutes)} at stops
+            {summary.waitMinutes ? ` · about ${formatDuration(summary.waitMinutes)} of free time between stops` : ""}
+          </Text>
+        )}
         <Text style={styles.summaryRow}>💵 {costLine(summary.cost)}</Text>
         {summary.bookAhead.length ? <Text style={[styles.summaryRow, styles.book]}>🎟️ Book ahead: {summary.bookAhead.join(", ")}</Text> : null}
       </View>
@@ -51,7 +55,7 @@ export function WalkCard({ walk, onShowOnMap, onSelectStop }: Props) {
             {newPart ? <Text style={styles.part}>{DAY_PART_LABEL[part]}</Text> : null}
             {stop.leg ? (
               <Text style={styles.leg}>
-                {stop.leg.mode === "transit" ? `TTC: ${stop.leg.transit_lines.map(transitLabel).join(" → ") || "🚌 transit"}` : "🦶 Walk"} {minutes(stop.leg.duration_s)} · {distance(stop.leg.distance_m)}
+                {stop.leg.mode === "transit" ? `TTC: ${stop.leg.transit_lines.map(transitLabel).join(" → ") || "🚌 transit"}` : isRun ? "🏃 Run" : "🦶 Walk"} {minutes(stop.leg.duration_s)} · {distance(stop.leg.distance_m)}
                 {stop.leg.estimated ? " (approx.)" : ""}
               </Text>
             ) : null}
@@ -105,7 +109,7 @@ export function WalkCard({ walk, onShowOnMap, onSelectStop }: Props) {
               .catch(() => setShareNote(null))
           }
         />
-        <PixelButton label={saved ? "Saved" : "Save walk"} icon={saved ? "★" : "☆"} small active={saved} onPress={() => void toggle("walk", walk.id, walk)} />
+        <PixelButton label={saved ? "Saved" : "Save route"} icon={saved ? "★" : "☆"} small active={saved} onPress={() => void toggle("walk", walk.id, walk)} />
       </View>
     </Panel>
   );

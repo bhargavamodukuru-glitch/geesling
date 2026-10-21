@@ -19,7 +19,7 @@ export function RouteKey({ walk, style }: { walk: Walk; style?: StyleProp<ViewSt
         <View style={styles.dashes}>
           {[0, 1, 2].map((i) => <View key={i} style={styles.dash} />)}
         </View>
-        <Text style={styles.label}>Walk</Text>
+        <Text style={styles.label}>{walk.activity === "run" ? "Run" : "Walk"}</Text>
       </View>
     </View>
   );

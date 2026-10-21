@@ -126,3 +126,23 @@ export function travelLine(summary: PlanSummary): string {
   const how = summary.usesTransit ? "walking + TTC" : "walking";
   return `${formatDuration(summary.travelMinutes)} travelling (${how})${summary.estimatedTravel ? ", approx." : ""}`;
 }
+
+/** Total distance of a route's legs, km. */
+export function routeDistanceKm(walk: Walk): number {
+  return walk.stops.reduce((sum, stop) => sum + (stop.leg?.distance_m ?? 0), 0) / 1000;
+}
+
+/** "6:00/km" (same format as the guide's run.ts). */
+export function paceLabel(paceMinPerKm: number): string {
+  const whole = Math.floor(paceMinPerKm);
+  const seconds = Math.round((paceMinPerKm - whole) * 60);
+  return seconds === 60 ? `${whole + 1}:00/km` : `${whole}:${String(seconds).padStart(2, "0")}/km`;
+}
+
+/** The headline for a running route: "🏃 15.2 km · about 1 h 31 min at 6:00/km". */
+export function runLine(walk: Walk): string {
+  const km = routeDistanceKm(walk);
+  const runSeconds = walk.stops.reduce((sum, stop) => sum + (stop.leg?.duration_s ?? 0), 0);
+  const pace = walk.run_pace_min_per_km ? ` at ${paceLabel(walk.run_pace_min_per_km)}` : "";
+  return `🏃 ${km.toFixed(1)} km · about ${formatDuration(runSeconds / 60)}${pace}`;
+}

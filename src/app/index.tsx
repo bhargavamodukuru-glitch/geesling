@@ -187,7 +187,7 @@ function Home() {
           <Text style={styles.walkBannerText} numberOfLines={1}>
             {walk.title}
           </Text>
-          <PixelButton label="Clear walk" small onPress={clearWalk} />
+          <PixelButton label="Clear route" small onPress={clearWalk} />
         </View>
       ) : null}
       {walk ? <RouteKey walk={walk} /> : null}
@@ -291,7 +291,7 @@ function Home() {
         <View style={[styles.panelArea, { flex: 1 - mapShare }]}>{panel}</View>
       </View>
       {transition === "walk" ? (
-        <View style={styles.loadingCover}><GeeslingLoader label="Geesling is planning your walk…" /></View>
+        <View style={styles.loadingCover}><GeeslingLoader label="Geesling is planning your route…" /></View>
       ) : null}
     </SafeAreaView>
   );

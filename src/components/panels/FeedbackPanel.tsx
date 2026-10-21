@@ -72,7 +72,7 @@ export function FeedbackPanel() {
           <TextInput
             value={message}
             onChangeText={setMessage}
-            placeholder="e.g. the walk took me somewhere closed, or I'd love brunch spots…"
+            placeholder="e.g. the route took me somewhere closed, or I'd love brunch spots…"
             placeholderTextColor={colors.inkSoft}
             multiline
             maxLength={2000}
