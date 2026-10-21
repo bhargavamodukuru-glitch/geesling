@@ -21,6 +21,8 @@ const WRAP_UP_TURNS_LEFT = 2;
 const MAX_INTERSTOP_TRAVEL_SECONDS = 20 * 60;
 const MAX_PART_CHANGE_TRAVEL_SECONDS = 40 * 60;
 const HOURLY_LIMIT = Number(Deno.env.get("GUIDE_HOURLY_LIMIT") ?? 20);
+// Anonymous accounts are free to create, so the per-person limit alone can't cap spend: this caps everyone together.
+const DAILY_LIMIT = Number(Deno.env.get("GUIDE_DAILY_LIMIT") ?? 300);
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -319,13 +321,19 @@ async function buildStops(
   return stops;
 }
 
-async function rateLimited(db: SupabaseClient, owner: string): Promise<boolean> {
-  const since = new Date(Date.now() - 3_600_000).toISOString();
-  const { count, error } = await db.from("guide_usage").select("id", { count: "exact", head: true }).eq("owner", owner).gte("created_at", since);
-  if (error) throw new Error(`rate limit check failed: ${error.message}`);
-  if ((count ?? 0) >= HOURLY_LIMIT) return true;
+/** "hour" when this person hit their hourly limit, "day" when everyone together hit the daily cap, else null (and the request is counted). */
+async function rateLimited(db: SupabaseClient, owner: string): Promise<"hour" | "day" | null> {
+  const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+  const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
+  const [mine, everyone] = await Promise.all([
+    db.from("guide_usage").select("id", { count: "exact", head: true }).eq("owner", owner).gte("created_at", hourAgo),
+    db.from("guide_usage").select("id", { count: "exact", head: true }).gte("created_at", dayAgo),
+  ]);
+  if (mine.error || everyone.error) throw new Error(`rate limit check failed: ${(mine.error ?? everyone.error)!.message}`);
+  if ((everyone.count ?? 0) >= DAILY_LIMIT) return "day";
+  if ((mine.count ?? 0) >= HOURLY_LIMIT) return "hour";
   await db.from("guide_usage").insert({ owner });
-  return false;
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -350,10 +358,15 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Expected a JSON object" }, 400);
   const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, 1200) : "";
   if (!prompt) return json({ error: "prompt is required" }, 400);
 
-  if (await rateLimited(db, owner)) {
+  const limited = await rateLimited(db, owner);
+  if (limited === "day") {
+    return json({ message: "Honk! I've waddled all the walks I can for today. The live map still works, and I'll be back tomorrow.", walk: null }, 429);
+  }
+  if (limited === "hour") {
     return json({ message: "Honk! My feet need a rest — you've asked a lot this hour. Try me again in a bit.", walk: null }, 429);
   }
 
@@ -382,8 +395,9 @@ Deno.serve(async (req) => {
   const spend = parseBudget(body.budgetLimit, body.partySize);
   const perPersonLimit = spend ? spend.limit / spend.people : null;
 
-  const history: Anthropic.Beta.BetaMessageParam[] = (body.history ?? [])
-    .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.text === "string" && m.text.trim())
+  // Untrusted input: anything that isn't a list of {role, text} objects is ignored rather than crashing the request.
+  const history: Anthropic.Beta.BetaMessageParam[] = (Array.isArray(body.history) ? body.history : [])
+    .filter((m) => m && typeof m === "object" && (m.role === "user" || m.role === "assistant") && typeof m.text === "string" && m.text.trim())
     .slice(-4)
     .map((m) => ({ role: m.role, content: m.text.slice(0, 1200) }));
   // The API requires the first message to be from the user.

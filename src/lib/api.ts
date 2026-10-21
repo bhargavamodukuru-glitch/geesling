@@ -85,8 +85,9 @@ export async function askGeesling(input: GuideInput): Promise<GuideReply> {
   return data;
 }
 
+/** Opens a walk by its share-link id. Walks can't be listed; the id is the key. */
 export async function fetchWalk(id: string): Promise<Walk | null> {
-  const { data, error } = await supabase.from("walks").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.rpc("get_walk", { walk_id: id });
   if (error) throw new Error(error.message);
   return (data as Walk | null) ?? null;
 }
