@@ -1,4 +1,4 @@
-import type { EventItem, MapItem, PlaceItem, TimeWindow } from "./types";
+import type { EventFilters, EventItem, MapItem, PlaceItem, TimeWindow } from "./types";
 
 const TZ = "America/Toronto";
 
@@ -151,3 +151,18 @@ export const WINDOW_LABELS: Record<TimeWindow, string> = {
   weekend: "Weekend",
   week: "This week",
 };
+
+/**
+ * Whether an event belongs in the Happening list for these filters. A picked date overrides the time window,
+ * so "Now" (live events only) never hides the events on a future date.
+ */
+export function keepEvent(event: EventItem, filters: EventFilters, from: Date, to: Date): boolean {
+  return (
+    new Date(event.next_start) < to &&
+    new Date(event.next_end) > from &&
+    (!filters.paidOnly || !event.is_free) &&
+    (!filters.drinksOnly || event.involves_alcohol) &&
+    (!filters.rsvpOnly || event.rsvp_required) &&
+    (filters.date !== null || filters.window !== "now" || event.is_live)
+  );
+}

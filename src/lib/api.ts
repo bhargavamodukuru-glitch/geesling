@@ -1,5 +1,5 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
-import { torontoDateRange, windowRange } from "./format";
+import { keepEvent, torontoDateRange, windowRange } from "./format";
 import { ensureSession, supabase } from "./supabase";
 import type { TravelChoice } from "./planner";
 import type { Bounds, ChatMessage, EventFilters, EventItem, MapItem, SavedItem, Walk } from "./types";
@@ -30,13 +30,7 @@ export async function fetchEventsInBounds(bounds: Bounds, filters: EventFilters)
   });
   if (error) throw new Error(error.message);
   const events = ((data ?? []) as EventRow[]).map(toEvent);
-  return events.filter((event) =>
-    new Date(event.next_start) < to && new Date(event.next_end) > from &&
-    (!filters.paidOnly || !event.is_free) &&
-    (!filters.drinksOnly || event.involves_alcohol) &&
-    (!filters.rsvpOnly || event.rsvp_required) &&
-    (filters.window !== "now" || event.is_live)
-  );
+  return events.filter((event) => keepEvent(event, filters, from, to));
 }
 
 export interface GuideInput {
