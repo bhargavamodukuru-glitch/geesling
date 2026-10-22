@@ -1,5 +1,5 @@
 // Usage report as CSV for Google Sheets' IMPORTDATA.
-// GET /functions/v1/usage-report?token=<USAGE_REPORT_TOKEN>&part=summary|daily|walks|top|feedback|costs
+// GET /functions/v1/usage-report?token=<USAGE_REPORT_TOKEN>&part=summary|daily|walks|top|feedback|costs|comments
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { costRows, type CostReport } from "./costs.ts";
 
@@ -28,6 +28,18 @@ interface Report {
 const RATING_LABEL: Record<number, string> = { 3: "😍 Love it", 2: "🙂 It's okay", 1: "😕 Not great" };
 
 const SITE = "https://geesling.expo.app";
+
+interface CommentRow {
+  created: string;
+  item_kind: "event" | "place";
+  item_id: string;
+  event_title: string | null;
+  nickname: string;
+  body: string;
+  report_count: number;
+  hidden: boolean;
+  source: "Team" | "User";
+}
 
 /** CSV cell; neutralises leading = + - @ so user prompts can't become spreadsheet formulas. */
 function cell(value: string | number | null): string {
@@ -108,6 +120,29 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
   const part = url.searchParams.get("part") ?? "summary";
+  if (part === "comments") {
+    const { data: comments, error: commentsError } = await db.rpc("comments_report");
+    if (commentsError) {
+      console.error("comments_report failed", commentsError.message);
+      return new Response("Report unavailable\n", { status: 500 });
+    }
+    const rows: Row[] = [
+      ["Posted (Toronto)", "Spot type", "Spot", "Nickname", "Comment", "Reports", "Status", "Source"],
+      ...(comments as CommentRow[]).map((c) => [
+        c.created,
+        c.item_kind === "event" ? "Event" : "Place",
+        // Place names aren't stored (Google content); a Maps link by place id opens the spot.
+        c.event_title ?? (c.item_kind === "place" && /^ChIJ|^Ei|^Gh/.test(c.item_id) ? `https://www.google.com/maps/place/?q=place_id:${c.item_id}` : c.item_id),
+        c.nickname,
+        c.body,
+        c.report_count,
+        c.hidden ? "Hidden" : "Visible",
+        c.source,
+      ]),
+    ];
+    return new Response(csv(rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+
   if (part === "costs") {
     const { data: costs, error: costError } = await db.rpc("cost_report");
     if (costError) {
@@ -125,7 +160,7 @@ Deno.serve(async (req) => {
     return new Response("Report unavailable\n", { status: 500 });
   }
   const rows = build(data as Report, part);
-  if (!rows) return new Response("Unknown part. Use summary, daily, walks, top, feedback or costs.\n", { status: 400 });
+  if (!rows) return new Response("Unknown part. Use summary, daily, walks, top, feedback, costs or comments.\n", { status: 400 });
 
   return new Response(csv(rows), {
     headers: { "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store" },

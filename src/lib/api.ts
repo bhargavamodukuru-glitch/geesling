@@ -142,3 +142,40 @@ export async function joinTeam(code: string): Promise<boolean> {
   if (error) throw new Error(error.message);
   return data === true;
 }
+
+export interface SpotComment {
+  id: number;
+  nickname: string;
+  body: string;
+  created_at: string;
+  /** Written by this device's account, so it can be deleted. */
+  mine: boolean;
+}
+
+/** Visible comments on a spot, newest first. */
+export async function fetchComments(kind: MapItem["kind"], itemId: string): Promise<SpotComment[]> {
+  await ensureSession();
+  const { data, error } = await supabase.rpc("spot_comments_for", { p_kind: kind, p_item_id: itemId });
+  if (error) throw new Error("Couldn't load comments.");
+  return (data ?? []) as SpotComment[];
+}
+
+/** Posts a comment. The server's message (too long, links, too many this hour) comes back as the error. */
+export async function postComment(kind: MapItem["kind"], itemId: string, nickname: string, body: string): Promise<void> {
+  await ensureSession();
+  const { error } = await supabase.rpc("add_spot_comment", { p_kind: kind, p_item_id: itemId, p_nickname: nickname, p_body: body });
+  if (error) throw new Error(error.message || "Couldn't post that. Try again?");
+}
+
+/** Reports a comment; enough reports (or one from the team) hide it. */
+export async function reportComment(id: number): Promise<void> {
+  await ensureSession();
+  const { error } = await supabase.rpc("report_comment", { p_comment_id: id });
+  if (error) throw new Error("Couldn't send that report.");
+}
+
+export async function deleteComment(id: number): Promise<void> {
+  await ensureSession();
+  const { error } = await supabase.rpc("delete_my_comment", { p_comment_id: id });
+  if (error) throw new Error("Couldn't delete that.");
+}
