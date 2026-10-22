@@ -9,6 +9,7 @@ import { MapPin } from "@/components/MapPin";
 import { logMapLoad } from "@/lib/api";
 import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
+import { fromFirstStop } from "@/lib/planSummary";
 import { colors, fonts, text } from "@/lib/theme";
 import { routeDrawing } from "@/lib/transit";
 import type { MapItem } from "@/lib/types";
@@ -90,7 +91,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
     const stopItems = walk?.stops.map((s) => s.item) ?? [];
     return [...stopItems, ...items.filter((i) => !walkIds.has(i.id)), ...(walk ? [] : PHOTO_SPOTS)];
   }, [items, walk, walkIds]);
-  const route = useMemo(() => routeDrawing(walk, decodePolyline), [walk]);
+  const route = useMemo(() => routeDrawing(walk && fromFirstStop(walk), decodePolyline), [walk]);
 
   if (!API_KEY) {
     return (

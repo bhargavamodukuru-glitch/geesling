@@ -24,9 +24,10 @@ export function openDirections(item: MapItem, transit = false): void {
 export function openWalkInMaps(walk: Walk): void {
   const points = walk.stops.map((s) => `${s.item.lat},${s.item.lng}`);
   if (points.length === 0) return;
-  const origin = walk.start_lat !== null && walk.start_lng !== null ? `${walk.start_lat},${walk.start_lng}` : points[0];
+  // Routes start at stop 1, not wherever the person was when they asked.
+  const origin = points[0];
   const destination = points[points.length - 1];
-  const waypoints = (walk.start_lat !== null ? points.slice(0, -1) : points.slice(1, -1)).join("|");
+  const waypoints = points.slice(1, -1).join("|");
   const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints ? `&waypoints=${encodeURIComponent(waypoints)}` : ""}&travelmode=walking`;
   void Linking.openURL(url);
 }

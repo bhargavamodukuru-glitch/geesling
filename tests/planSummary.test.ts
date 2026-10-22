@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { costLine, eventTime, formatDuration, summarizePlan, travelLine } from "../src/lib/planSummary.ts";
+import { costLine, eventTime, formatDuration, fromFirstStop, summarizePlan, travelLine } from "../src/lib/planSummary.ts";
 import type { EventItem, Leg, PlaceItem, Walk, WalkStop } from "../src/lib/types.ts";
 
 const event = (o: Partial<EventItem> = {}): EventItem => ({
@@ -112,4 +112,13 @@ test("an event stop says when it ends and how long you get after travelling ther
   const ended = eventTime(atSeven({ arrive_at: "2026-10-22T23:10:00Z" }))!;
   assert.deepEqual([ended.tight, ended.ended], [false, true]);
   assert.equal(eventTime(stop(1, place())), null, "places have no end time");
+});
+
+test("routes start at stop 1: the leg from the starting point is dropped, later legs stay", () => {
+  const w = walk([stop(1, place(), { leg: leg({ duration_s: 900 }) }), stop(2, place({ id: "p2" }), { leg: leg({ duration_s: 300 }) })]);
+  const route = fromFirstStop(w);
+  assert.equal(route.stops[0].leg, null);
+  assert.equal(route.stops[1].leg?.duration_s, 300);
+  assert.equal(summarizePlan(route).travelMinutes, 5, "only travel between stops counts");
+  assert.equal(fromFirstStop(route), route, "already starting at stop 1: unchanged");
 });

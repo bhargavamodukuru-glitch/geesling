@@ -5,7 +5,7 @@ import { useSaved } from "@/hooks/useSaved";
 import { clock, distance, minutes, priceLabel } from "@/lib/format";
 import { openWalkInMaps, shareWalk } from "@/lib/links";
 import { DAY_PART_LABEL, SPLIT_WALK_MINUTES, dayPart } from "@/lib/dayParts";
-import { costLine, eventTime, formatDuration, runLine, summarizePlan, travelLine } from "@/lib/planSummary";
+import { costLine, eventTime, formatDuration, fromFirstStop, runLine, summarizePlan, travelLine } from "@/lib/planSummary";
 import { isTopRated } from "@/lib/placeBadges";
 import { transitLabel, transitSteps } from "@/lib/transit";
 import { colors, fonts, text } from "@/lib/theme";
@@ -17,10 +17,11 @@ interface Props {
   onSelectStop?: (item: MapItem, why: string) => void;
 }
 
-export function WalkCard({ walk, onShowOnMap, onSelectStop }: Props) {
+export function WalkCard({ walk: saved, onShowOnMap, onSelectStop }: Props) {
+  const walk = useMemo(() => fromFirstStop(saved), [saved]);
   const { isSaved, toggle } = useSaved();
   const [shareNote, setShareNote] = useState<string | null>(null);
-  const saved = isSaved("walk", walk.id);
+  const isSavedWalk = isSaved("walk", walk.id);
   const summary = useMemo(() => summarizePlan(walk), [walk]);
   // Long walks are shown in parts of the day, with a header wherever the part changes.
   const isRun = walk.activity === "run";
@@ -122,7 +123,7 @@ export function WalkCard({ walk, onShowOnMap, onSelectStop }: Props) {
               .catch(() => setShareNote(null))
           }
         />
-        <PixelButton label={saved ? "Saved" : "Save route"} icon={saved ? "★" : "☆"} small active={saved} onPress={() => void toggle("walk", walk.id, walk)} />
+        <PixelButton label={isSavedWalk ? "Saved" : "Save route"} icon={isSavedWalk ? "★" : "☆"} small active={isSavedWalk} onPress={() => void toggle("walk", walk.id, saved)} />
       </View>
     </Panel>
   );

@@ -165,3 +165,12 @@ export function eventTime(stop: WalkStop): EventTime | null {
   const needed = Math.min(30, Math.max(10, Math.round(((Date.parse(end) - Date.parse(start)) / 60_000) * 0.8)));
   return { endsAt: end, minutesLeft, ended: minutesLeft <= 0, tight: minutesLeft > 0 && minutesLeft < needed };
 }
+
+/**
+ * Routes start at stop 1: the trip from wherever the person was (or the downtown default) isn't part of the route.
+ * Routes saved before this still carry that leg, so it is dropped here for everything that shows a route.
+ */
+export function fromFirstStop(walk: Walk): Walk {
+  if (!walk.stops[0]?.leg) return walk;
+  return { ...walk, stops: [{ ...walk.stops[0], leg: null }, ...walk.stops.slice(1)] };
+}

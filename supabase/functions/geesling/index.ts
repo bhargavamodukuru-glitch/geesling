@@ -313,7 +313,8 @@ async function buildStops(
 ): Promise<WalkStop[]> {
   const stops: WalkStop[] = [];
   let cursor = start;
-  let previous: { lat: number; lng: number } | null = origin;
+  // Routes start at stop 1: no leg from the starting point (it only anchors the search).
+  let previous: { lat: number; lng: number } | null = null;
   for (const [index, stop] of chosen.entries()) {
     const item = known.get(stop.id)!;
     const routed = previous ? await bestLeg(routesKey, previous, item, cursor, allowTransit, meter) : null;
@@ -628,7 +629,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
               if (run) {
                 // A run is judged by distance (and, for a loop, ending near the start), not by hops between stops.
                 const meters = candidateStops.reduce((sum, stop) => sum + (stop.leg?.distance_m ?? 0), 0);
-                const first = origin ?? (candidateStops[0] ? { lat: candidateStops[0].item.lat, lng: candidateStops[0].item.lng } : null);
+                const first = candidateStops[0] ? { lat: candidateStops[0].item.lat, lng: candidateStops[0].item.lng } : null;
                 const last = candidateStops[candidateStops.length - 1]?.item;
                 const loopGap = run.loop && first && last ? metersBetween(first, last) : 0;
                 const fits = runDistanceFits(meters, run.distanceKm) && loopGap <= 1500;

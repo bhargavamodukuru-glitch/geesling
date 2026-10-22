@@ -4,7 +4,7 @@ import type { Walk } from "@/lib/types";
 
 /** Small key for a walk's route lines (placed below the home screen's walk banner; pass `style` to move it): solid red is a TTC ride, dashed brown is walking. Same colours as the map. */
 export function RouteKey({ walk, style }: { walk: Walk; style?: StyleProp<ViewStyle> }) {
-  const legs = walk.stops.map((s) => s.leg).filter((leg) => leg?.polyline);
+  const legs = walk.stops.slice(1).map((s) => s.leg).filter((leg) => leg?.polyline); // routes start at stop 1
   if (!legs.length) return null;
   const transit = legs.some((leg) => leg!.mode === "transit");
   return (

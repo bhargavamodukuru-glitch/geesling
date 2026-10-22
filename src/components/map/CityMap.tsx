@@ -6,6 +6,7 @@ import { MapPin } from "@/components/MapPin";
 import { OUTSIDE_MASK_OUTER, PAN_BOUNDS, TORONTO_RING, clampToPanArea } from "@/lib/area";
 import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
+import { fromFirstStop } from "@/lib/planSummary";
 import { colors, fonts } from "@/lib/theme";
 import { routeDrawing } from "@/lib/transit";
 import type { MapItem } from "@/lib/types";
@@ -99,7 +100,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
     return () => clearTimeout(timer);
   }, [pins]);
 
-  const route = useMemo(() => routeDrawing(walk, decodePolyline), [walk]);
+  const route = useMemo(() => routeDrawing(walk && fromFirstStop(walk), decodePolyline), [walk]);
 
   return (
     <MapView

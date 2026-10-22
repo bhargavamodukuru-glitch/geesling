@@ -17,7 +17,7 @@ export const DEFAULT_DELTA = { latitudeDelta: 0.06, longitudeDelta: 0.06 };
 export function walkFocusBounds(walk: Walk, user: { lat: number; lng: number } | null): Bounds | null {
   const points = walk.stops.map((s) => ({ lat: s.item.lat, lng: s.item.lng }));
   // Keep TTC boarding stops in view: the first one can be well before stop 1.
-  for (const segment of walk.stops.flatMap((s) => s.leg?.segments ?? [])) {
+  for (const segment of walk.stops.slice(1).flatMap((s) => s.leg?.segments ?? [])) { // routes start at stop 1
     if (segment.board) points.push({ lat: segment.board.lat, lng: segment.board.lng });
   }
   if (user) points.push(user);
