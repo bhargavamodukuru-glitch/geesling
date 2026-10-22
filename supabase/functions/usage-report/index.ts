@@ -59,6 +59,8 @@ function build(report: Report, part: string): Row[] | null {
         ["Metric", "Value"],
         ["Unique users", s.users],
         ["Real users (excluding team)", s.real_users],
+        ["Routes by end users", s.routes_end_users],
+        ["Routes by team", s.routes_team],
         ["Saved items", s.saved],
         ["Live & upcoming events", s.events_live],
         ["Last event refresh", s.last_ingest],
