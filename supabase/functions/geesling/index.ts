@@ -6,6 +6,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.1
 import { checkBudget, fitsPerPerson, parseBudget, statedBudget } from "./budget.ts";
 import { dayPart, notBefore } from "./daytime.ts";
 import { runDistanceFits, runRequest, runSeconds, type RunRequest } from "./run.ts";
+import { eventTimingProblems, type TimedStop } from "./timing.ts";
 import { dayPartMinutes, relativeDay, requestedStart, torontoDay } from "./when.ts";
 import { leavesTooMuchTime, minutesLeftTonight, statedDuration } from "./fill.ts";
 import { contextBlock, MODEL, SYSTEM_PROMPT, TOOLS } from "./prompt.ts";
@@ -23,6 +24,14 @@ const MAX_INTERSTOP_TRAVEL_SECONDS = 20 * 60;
 const MAX_PART_CHANGE_TRAVEL_SECONDS = 40 * 60;
 // A running route is sent back at most this many times for distance before the closest attempt is used.
 const MAX_RUN_RETRIES = 2;
+// A route with events reached too late is sent back at most this many times before those events are dropped.
+const MAX_TIMING_RETRIES = 2;
+
+function timedStop(stop: WalkStop): TimedStop {
+  return stop.item.kind === "event"
+    ? { name: stop.item.title, kind: "event", arrive_at: stop.arrive_at, next_start: stop.item.next_start, next_end: stop.item.next_end }
+    : { name: stop.item.name, kind: "place", arrive_at: stop.arrive_at };
+}
 
 function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const rad = Math.PI / 180;
@@ -318,7 +327,7 @@ async function buildStops(
       const endsAt = new Date(item.next_end);
       if (arrive < startsAt) arrive = startsAt; // wait for doors
       const remaining = Math.round((endsAt.getTime() - arrive.getTime()) / 60_000);
-      if (remaining > 0) stay = Math.min(stay, remaining);
+      stay = Math.max(0, Math.min(stay, remaining)); // never past the end (0 if it has already ended)
     }
     const leave = new Date(arrive.getTime() + stay * 60_000);
     stops.push({
@@ -498,6 +507,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
   let validatedStops: WalkStop[] | null = null;
   let askedToFill = false;
   let runRetries = 0;
+  let timingRetries = 0;
   let bestRun: { walk: PresentWalkInput; stops: WalkStop[]; miss: number; meters: number } | null = null;
   // The best walk the guide built but we sent back, used if it runs out of turns before presenting another.
   let fallback: { walk: PresentWalkInput; stops: WalkStop[] } | null = null;
@@ -662,6 +672,26 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
                   content: `This route exceeds the travel limit (20 minutes between stops, 40 when moving to a new part of the day or a timed meal): ${details}. Keep the requested anchor and order, then search for a nearby replacement within 800–1200 m of the preceding stop. Prefer highly rated places with substantial review counts. If no suitable nearby replacement exists, omit that stop and present a shorter walk.`,
                   is_error: true,
                 };
+              }
+              // Events need real time once you've travelled there: not arriving at 6:55 for something ending at 7.
+              const timing = eventTimingProblems(candidateStops.map(timedStop));
+              if (timing.length && timingRetries < MAX_TIMING_RETRIES) {
+                timingRetries += 1;
+                return {
+                  type: "tool_result",
+                  tool_use_id: tool.id,
+                  content: `Not enough time at some events after travelling there: ${timing.join(" ")} Put events that end early first, pick a different session or event, or drop it. Aim to arrive with at least 30 minutes before an event ends.`,
+                  is_error: true,
+                };
+              }
+              if (timing.length) {
+                // Out of retries: drop the events that can't be made in time rather than show them.
+                const late = new Set(candidateStops.filter((stop) => eventTimingProblems([timedStop(stop)]).length).map((stop) => stop.item.id));
+                const kept = walk.stops.slice(0, 8).filter((stop) => !late.has(stop.id));
+                if (kept.length) {
+                  walk.stops = kept;
+                  candidateStops.splice(0, candidateStops.length, ...(await buildStops(kept, known, origin, start, placesKey, allowTransit, meter.route, run)));
+                }
               }
               // Time actually spent (stays and travel); waiting for a timed stop doesn't count as filled.
               const walkMinutes = Math.round(candidateStops.reduce((sum, stop) => sum + stop.stay_minutes + (stop.leg?.duration_s ?? 0) / 60, 0));

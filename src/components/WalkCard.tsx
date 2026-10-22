@@ -5,7 +5,7 @@ import { useSaved } from "@/hooks/useSaved";
 import { clock, distance, minutes, priceLabel } from "@/lib/format";
 import { openWalkInMaps, shareWalk } from "@/lib/links";
 import { DAY_PART_LABEL, SPLIT_WALK_MINUTES, dayPart } from "@/lib/dayParts";
-import { costLine, formatDuration, runLine, summarizePlan, travelLine } from "@/lib/planSummary";
+import { costLine, eventTime, formatDuration, runLine, summarizePlan, travelLine } from "@/lib/planSummary";
 import { isTopRated } from "@/lib/placeBadges";
 import { transitLabel, transitSteps } from "@/lib/transit";
 import { colors, fonts, text } from "@/lib/theme";
@@ -86,6 +86,19 @@ export function WalkCard({ walk, onShowOnMap, onSelectStop }: Props) {
                   {clock(stop.arrive_at)}–{clock(stop.leave_at)} · {priceLabel(stop.item)}
                   {stop.item.kind === "place" && isTopRated(stop.item) ? ` · ★ ${stop.item.rating}` : ""}
                 </Text>
+                {(() => {
+                  // How long you actually get there after travelling, and when an event ends.
+                  const event = eventTime(stop);
+                  if (isRun) return null;
+                  if (event?.ended) return <Text style={[text.small, styles.late]}>⚠️ This event ends at {clock(event.endsAt)}, before you’d get there</Text>;
+                  return (
+                    <Text style={[text.small, event?.tight && styles.late]}>
+                      ⏳ {formatDuration(stop.stay_minutes)} there
+                      {event ? ` · ends ${clock(event.endsAt)}, ${formatDuration(Math.max(event.minutesLeft, 0))} after you arrive` : ""}
+                      {event?.tight ? " (tight)" : ""}
+                    </Text>
+                  );
+                })()}
                 {stop.item.kind === "event" && stop.item.rsvp_required ? <Tag label="🎟️ RSVP ahead" color={colors.accent} /> : null}
                 <Text style={text.small}>{stop.why}</Text>
               </View>
@@ -119,6 +132,7 @@ const styles = StyleSheet.create({
   card: { gap: 6 },
   title: { fontFamily: fonts.heading, fontSize: 18, color: colors.accent },
   part: { fontFamily: fonts.heading, fontSize: 13, color: colors.accent, marginTop: 6, letterSpacing: 1 },
+  late: { color: colors.accent },
   transitStep: { fontFamily: fonts.body, fontSize: 16, lineHeight: 18, color: colors.inkSoft, marginLeft: 48, marginBottom: 2 },
   leg: { fontFamily: fonts.body, fontSize: 17, color: colors.wood, marginLeft: 36, marginVertical: 2 },
   stop: { flexDirection: "row", gap: 8, alignItems: "flex-start", backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, padding: 6 },

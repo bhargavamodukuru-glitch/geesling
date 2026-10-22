@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { costLine, formatDuration, summarizePlan, travelLine } from "../src/lib/planSummary.ts";
+import { costLine, eventTime, formatDuration, summarizePlan, travelLine } from "../src/lib/planSummary.ts";
 import type { EventItem, Leg, PlaceItem, Walk, WalkStop } from "../src/lib/types.ts";
 
 const event = (o: Partial<EventItem> = {}): EventItem => ({
@@ -100,4 +100,16 @@ test("an open-ended place range makes the total a floor", () => {
 test("a $$ level alone is still not turned into a dollar amount", () => {
   const s = summarizePlan(walk([stop(1, place({ price_level: "PRICE_LEVEL_MODERATE" }))]));
   assert.equal(s.cost.unknownStops, 1);
+});
+
+test("an event stop says when it ends and how long you get after travelling there", () => {
+  const atSeven = (o: Partial<WalkStop>) => stop(1, event({ next_start: "2026-10-22T21:00:00Z", next_end: "2026-10-22T23:00:00Z" }), o);
+  const fine = eventTime(atSeven({ arrive_at: "2026-10-22T21:30:00Z" }))!;
+  assert.equal(fine.minutesLeft, 90);
+  assert.equal(fine.tight, false);
+  const tight = eventTime(atSeven({ arrive_at: "2026-10-22T22:55:00Z" }))!;
+  assert.deepEqual([tight.minutesLeft, tight.tight, tight.ended], [5, true, false], "6:55 for a 7:00 end");
+  const ended = eventTime(atSeven({ arrive_at: "2026-10-22T23:10:00Z" }))!;
+  assert.deepEqual([ended.tight, ended.ended], [false, true]);
+  assert.equal(eventTime(stop(1, place())), null, "places have no end time");
 });

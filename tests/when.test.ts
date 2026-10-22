@@ -61,6 +61,7 @@ test("parts of the day: night from 5 pm, evening from 4 pm, afternoon noon to 4,
   assert.deepEqual(dayPart("lazy afternoon"), { name: "afternoon", start: 12 * 60, end: 16 * 60 });
   assert.deepEqual(dayPart("saturday morning coffee"), { name: "morning", start: 8 * 60, end: 12 * 60 });
   assert.equal(dayPart("nightlife and bars"), null, "nightlife is not a time");
+  assert.equal(dayPart("after work today: two gallery shows")?.start, 17 * 60, "after work is after standard work hours");
   assert.equal(dayPart("cheap dumplings"), null);
 });
 

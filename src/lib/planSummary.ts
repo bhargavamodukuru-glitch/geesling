@@ -1,6 +1,6 @@
 // Plan-level summary of a walk: total time, travel, booking and what is actually known about cost.
 // Pure and type-only imports, so it runs under plain Node in tests/planSummary.test.ts.
-import type { MapItem, Walk } from "./types";
+import type { MapItem, Walk, WalkStop } from "./types";
 
 export interface CostSummary {
   /** Stops that are confirmed free. */
@@ -145,4 +145,23 @@ export function runLine(walk: Walk): string {
   const runSeconds = walk.stops.reduce((sum, stop) => sum + (stop.leg?.duration_s ?? 0), 0);
   const pace = walk.run_pace_min_per_km ? ` at ${paceLabel(walk.run_pace_min_per_km)}` : "";
   return `🏃 ${km.toFixed(1)} km · about ${formatDuration(runSeconds / 60)}${pace}`;
+}
+
+/** How the timing works out at an event stop once you've travelled there. Null for places. */
+export interface EventTime {
+  /** When the event ends (ISO). */
+  endsAt: string;
+  /** Minutes between arriving and the end (negative once it has ended). */
+  minutesLeft: number;
+  /** Less than 30 minutes left (or most of a short event), the same bar the guide plans to. */
+  tight: boolean;
+  ended: boolean;
+}
+
+export function eventTime(stop: WalkStop): EventTime | null {
+  if (stop.item.kind !== "event") return null;
+  const { next_start: start, next_end: end } = stop.item;
+  const minutesLeft = Math.round((Date.parse(end) - Date.parse(stop.arrive_at)) / 60_000);
+  const needed = Math.min(30, Math.max(10, Math.round(((Date.parse(end) - Date.parse(start)) / 60_000) * 0.8)));
+  return { endsAt: end, minutesLeft, ended: minutesLeft <= 0, tight: minutesLeft > 0 && minutesLeft < needed };
 }

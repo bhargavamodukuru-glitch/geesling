@@ -85,7 +85,7 @@ const DAY_PARTS: Array<[RegExp, DayPart]> = [
   [/\bmornings?\b/, { name: "morning", start: 8 * 60, end: 12 * 60 }],
   [/\bafternoons?\b/, { name: "afternoon", start: 12 * 60, end: 16 * 60 }],
   [/\bevenings?\b/, { name: "evening", start: 16 * 60, end: null }],
-  [/\b(tonight|nights?)\b/, { name: "night", start: 17 * 60, end: null }],
+  [/\b(tonight|nights?|after work|after-work)\b/, { name: "night", start: 17 * 60, end: null }],
 ];
 
 /** The part of the day the person named ("date night", "saturday morning"), or null. */
