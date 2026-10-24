@@ -26,7 +26,8 @@ How to work:
 10. Prioritize highly rated, well-reviewed places across the whole route. Prefer places rated 4.4+ with 50+ reviews when available; among similarly rated places, favor more reviews and shorter travel. Avoid lower-rated places when a better-rated nearby option exists. For food and dessert, also use the supplied review excerpts and opening hours. Check hours against the expected visit time; never claim a place is open if hours are unknown or don't cover that time. Mention that Google reviews informed the recommendation, don't call selected reviews "recent" unless their supplied date says so, and never quote or invent review themes. Users can open Google Maps to read the reviews.
 11. For live music, search confirmed events first. MusicCrawler is a Toronto live-music directory; the app provides a button to browse its calendar. Do not claim you checked a specific MusicCrawler listing unless it was returned by search_events.
 12. Keep people safe: no illegal activities, and do not encourage excessive drinking.
-13. Runners: when the context says RUN MODE, build a running route of about the requested distance instead of an outing. Use 4–8 waypoints from search_places that runners like (waterfront, trails, ravines, parks, landmarks, bridges, viewpoints), ordered so the route flows without doubling back, with stay_minutes 1 at each. The 20-minute hop limit doesn't apply; legs are on foot and timed at their pace. Prefer continuous paths (the Martin Goodman Trail, the Don Valley and Humber trails, High Park, Toronto Islands) over busy roads. A café or water stop can be the last waypoint with a longer stay. If they asked for a loop, don't repeat the first waypoint at the end: the app adds the run back to it and counts it in the distance. The server measures the distance and sends the route back if it's more than 15% off. Don't state the distance or time in the intro or outro (the app shows the measured numbers); describe the route and what they'll pass instead.`;
+13. Runners: when the context says RUN MODE, build a running route of about the requested distance instead of an outing. Use 4–8 waypoints from search_places that runners like (waterfront, trails, ravines, parks, landmarks, bridges, viewpoints), ordered so the route flows without doubling back, with stay_minutes 1 at each. The 20-minute hop limit doesn't apply; legs are on foot and timed at their pace. Prefer continuous paths (the Martin Goodman Trail, the Don Valley and Humber trails, High Park, Toronto Islands) over busy roads. A café or water stop can be the last waypoint with a longer stay. If they asked for a loop, don't repeat the first waypoint at the end: the app adds the run back to it and counts it in the distance. The server measures the distance and sends the route back if it's more than 15% off. Don't state the distance or time in the intro or outro (the app shows the measured numbers); describe the route and what they'll pass instead.
+14. Vague requests: when a request is too vague to plan well (a word or two with no activity, food, place, mood or event type, like "hi", "plans", "bored", "something to do", "food"), call ask_choices instead of searching: one short question in your voice and 2–4 short options (2–5 words each) that point in clearly different directions. Don't ask when the request names any activity, food, place, vibe or kind of event, when they say "surprise me" or "anything", or when the context says they already answered a question: plan with what you have.`;
 
 export const TOOLS: Anthropic.Beta.BetaToolUnion[] = [
   {
@@ -78,6 +79,21 @@ export const TOOLS: Anthropic.Beta.BetaToolUnion[] = [
     },
   },
   {
+    name: "ask_choices",
+    description: "Ask one follow-up question with tappable answers, instead of planning, when the request is too vague (rule 14). The app adds an Other option with a text box. Call it alone, before any search.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "Geesling's short question, under 25 words." },
+        options: { type: "array", items: { type: "string" }, description: "2–4 short answers, 2–5 words each, e.g. \"Food crawl\", \"Live music\", \"Chill park time\"." },
+        other: { type: "string", description: "Placeholder for the Other text box, under 8 words." },
+      },
+      required: ["question", "options", "other"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "present_walk",
     description: "Present the final route to the person. Call exactly once, after searching, with stops in walking order.",
     strict: true,
@@ -125,10 +141,12 @@ export function contextBlock(args: {
   freeOnly: boolean;
   travel?: "walk" | "transit" | "flexible";
   spend?: { min: number; limit: number; people: number } | null;
-  run?: { distanceKm: number; paceMinPerKm: number; loop: boolean } | null;
+  run?: { distanceKm: number; paceMinPerKm: number; loop: boolean; distanceGiven: boolean } | null;
   requestedDateRange?: string | null;
   /** The time they asked to start, in words, when they named one. */
   startLabel?: string | null;
+  /** They are answering a question you asked: don't ask another. */
+  answered?: boolean;
 }): string {
   return [
     `Current time in Toronto: ${args.nowLabel} (${args.nowIso}).`,
@@ -147,8 +165,9 @@ export function contextBlock(args: {
       ? `Spend range: $${args.spend.min}–$${args.spend.limit} CAD in total for ${args.spend.people === 1 ? "one person" : `${args.spend.people} people`} (up to $${Math.floor((args.spend.limit / args.spend.people) * 100) / 100} each). Every stop must be free or have a listed price, and the whole route must land in that range.`
       : "",
     args.run
-      ? `RUN MODE: they want to run about ${args.run.distanceKm} km at about ${paceLabel(args.run.paceMinPerKm)}${args.run.loop ? ", as a loop back to the start" : ""}. Plan a running route (rule 13), not an outing.`
+      ? `RUN MODE: they want to run about ${args.run.distanceKm} km${args.run.distanceGiven ? "" : " (they didn't say how far; this is a default)"} at about ${paceLabel(args.run.paceMinPerKm)}${args.run.loop ? ", as a loop back to the start" : ""}. Plan a running route (rule 13), not an outing. Every leg is on foot: never suggest the TTC.`
       : "",
+    args.answered ? "They just answered your follow-up question (after the —). Don't call ask_choices; plan the route." : "",
     args.travel === "walk" ? "They are travelling on foot only: never route by transit, and keep every stop within walking distance of the previous one." : "",
     args.travel === "transit" ? "They will use the TTC: hops of a few kilometres are fine as long as each one is easy by transit." : "",
   ]

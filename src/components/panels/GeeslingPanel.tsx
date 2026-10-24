@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Linking from "expo-linking";
-import { FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, View, type TextInputInstance } from "react-native";
 import { Goose } from "@/components/Goose";
 import { PlannerFlow } from "@/components/PlannerFlow";
 import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { WalkCard } from "@/components/WalkCard";
 import { askGeesling } from "@/lib/api";
+import { answerPrompt, type Choices } from "@/lib/choices";
 import { OUT_OF_AREA_MESSAGE, mentionsOtherPlace } from "@/lib/area";
 import { MAX_RETRIES, buildRetryRequest, type LatLng, type PlanRequest } from "@/lib/planner";
 import { colors, fonts, text } from "@/lib/theme";
@@ -54,7 +55,10 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
   const [adjusting, setAdjusting] = useState(false);
   // What the latest walk answers: the original request, every name shown so far, and how many retries were used.
   const [plan, setPlan] = useState<{ request: PlanRequest; shown: string[]; retries: number } | null>(null);
+  // Set after they tap Other: the next thing they type answers this question.
+  const [answering, setAnswering] = useState<Choices | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const lastInitialRequest = useRef<PlanRequest | null>(null);
 
   // `request` carries the guided planner's choices; fields it leaves undefined fall back to this panel's own state.
@@ -86,8 +90,9 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
         travel: request?.travel,
         budgetLimit: request?.budgetLimit,
         partySize: request?.partySize,
+        answered: request?.answered,
       });
-      setMessages((m) => [...m, { id: nextId(), role: "assistant", text: reply.message, walk: reply.walk, musicCrawlerLink }]);
+      setMessages((m) => [...m, { id: nextId(), role: "assistant", text: reply.message, walk: reply.walk, musicCrawlerLink, choices: reply.choices }]);
       if (reply.walk) {
         const names = reply.walk.stops.map((s) => itemTitle(s.item));
         setPlan((prev) =>
@@ -105,6 +110,14 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [busy, messages, origin, budget, freeOnly, onWalk, onInitialPromptComplete]);
+
+  // A tapped answer, or what they typed after Other, goes back with the original request.
+  const answer = (choices: Choices, reply: string) => {
+    setAnswering(null);
+    void send(answerPrompt(choices, reply), false, { prompt: answerPrompt(choices, reply), display: reply.trim(), answered: true });
+  };
+  const submitDraft = () => (answering && draft.trim() ? answer(answering, draft) : void send(draft));
+  const lastId = messages[messages.length - 1]?.id ?? null;
 
   const lastWalkId = useMemo(() => [...messages].reverse().find((m) => m.walk)?.id ?? null, [messages]);
   const retriesLeft = plan ? MAX_RETRIES - plan.retries : 0;
@@ -150,7 +163,7 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
         ref={listRef}
         data={messages}
         // Rows read `busy` and the retry count, so tell the list to re-render when they change.
-        extraData={`${busy}-${retriesLeft}-${lastWalkId}`}
+        extraData={`${busy}-${retriesLeft}-${lastWalkId}-${answering?.base ?? ""}`}
         keyExtractor={(m) => m.id}
         contentContainerStyle={{ gap: 10, padding: 12 }}
         ListHeaderComponent={messages.length === 0 ? (
@@ -182,6 +195,23 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
                 <Text style={styles.speaker}>GEESLING</Text>
                 <Text style={text.body}>{item.text}</Text>
               </Panel>
+              {item.choices && item.id === lastId && !busy ? (
+                <View style={styles.choices} accessibilityLabel="Pick an answer">
+                  {item.choices.options.map((option) => (
+                    <PixelButton key={option} label={option} small tone="gold" onPress={() => answer(item.choices!, option)} />
+                  ))}
+                  <PixelButton
+                    label="Other"
+                    icon="✏️"
+                    small
+                    active={answering === item.choices}
+                    onPress={() => {
+                      setAnswering(item.choices!);
+                      inputRef.current?.focus();
+                    }}
+                  />
+                </View>
+              ) : null}
               {item.walk ? <WalkCard walk={item.walk} onShowOnMap={onWalk} onSelectStop={onSelectStop} /> : null}
               {item.id === lastWalkId && !busy ? (
                 <View style={styles.resultActions}>
@@ -219,27 +249,28 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
         </ScrollView>
         <View style={styles.inputRow}>
           <TextInput
+            ref={inputRef}
             value={draft}
             onChangeText={setDraft}
-            placeholder="e.g. cheap dumplings, a dessert spot and a gallery opening"
+            placeholder={answering?.other ?? "e.g. cheap dumplings, a dessert spot and a gallery opening"}
             placeholderTextColor={colors.inkSoft}
             style={styles.input}
             multiline
             maxLength={1200}
-            onSubmitEditing={() => void send(draft)}
+            onSubmitEditing={submitDraft}
             onKeyPress={(e) => {
               // Web textareas insert a newline on Enter; send instead (Shift+Enter keeps the newline).
               const native = e.nativeEvent as { key: string; shiftKey?: boolean };
               if (Platform.OS === "web" && native.key === "Enter" && !native.shiftKey) {
                 e.preventDefault();
-                void send(draft);
+                submitDraft();
               }
             }}
             submitBehavior="submit"
             returnKeyType="send"
             editable={!busy}
           />
-          <PixelButton label="Ask" tone="red" disabled={busy || !draft.trim()} onPress={() => void send(draft)} />
+          <PixelButton label="Ask" tone="red" disabled={busy || !draft.trim()} onPress={submitDraft} />
         </View>
       </View>
     </View>
@@ -252,6 +283,7 @@ const styles = StyleSheet.create({
   speaker: { fontFamily: fonts.heading, fontSize: 11, color: colors.accent },
   chipScroll: { flexGrow: 0, flexShrink: 0 },
   chips: { gap: 6, alignItems: "center", paddingVertical: 4 },
+  choices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   resultActions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   userBubble: { alignSelf: "flex-end", maxWidth: "85%", backgroundColor: colors.wood, borderWidth: 3, borderColor: colors.ink, padding: 10 },
   thinking: { flexDirection: "row", alignItems: "center", gap: 10, padding: 8 },

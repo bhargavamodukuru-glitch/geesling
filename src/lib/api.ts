@@ -1,4 +1,5 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
+import { readChoices, type Choices } from "./choices";
 import { keepEvent, torontoDateRange, windowRange } from "./format";
 import { ensureSession, supabase } from "./supabase";
 import type { TravelChoice } from "./planner";
@@ -43,11 +44,14 @@ export interface GuideInput {
   travel?: TravelChoice;
   budgetLimit?: number | null;
   partySize?: number;
+  answered?: boolean;
 }
 
 export interface GuideReply {
   message: string;
   walk: Walk | null;
+  /** A follow-up question's answers, when the request was too vague to plan. */
+  choices?: Choices | null;
 }
 
 export async function askGeesling(input: GuideInput): Promise<GuideReply> {
@@ -63,6 +67,7 @@ export async function askGeesling(input: GuideInput): Promise<GuideReply> {
       travel: input.travel,
       budgetLimit: input.budgetLimit ?? null,
       partySize: input.partySize ?? 1,
+      answered: input.answered === true,
     },
   });
   if (error) {
@@ -76,7 +81,7 @@ export async function askGeesling(input: GuideInput): Promise<GuideReply> {
     throw new Error(error.message);
   }
   if (!data) throw new Error("Geesling didn't answer");
-  return data;
+  return { ...data, choices: readChoices(data.choices) };
 }
 
 /** Opens a walk by its share-link id. Walks can't be listed; the id is the key. */

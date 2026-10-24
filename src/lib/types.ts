@@ -1,3 +1,5 @@
+import type { Choices } from "./choices";
+
 export interface EventItem {
   kind: "event";
   id: string;
@@ -124,6 +126,8 @@ export interface ChatMessage {
   walk?: Walk | null;
   error?: boolean;
   musicCrawlerLink?: boolean;
+  /** Tappable answers to the goose's follow-up question (plus Other). */
+  choices?: Choices | null;
 }
 
 export interface Bounds {

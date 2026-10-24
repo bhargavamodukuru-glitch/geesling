@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { paceLabel, runDistanceFits, runRequest, runSeconds } from "../supabase/functions/geesling/run.ts";
+import { paceLabel, runChoices, runDistanceFits, runRequest, runSeconds } from "../supabase/functions/geesling/run.ts";
 
 test("a runner's request reads its distance", () => {
-  assert.deepEqual(runRequest("I want to run a 15k, suggest a route through the city"), { distanceKm: 15, paceMinPerKm: 6, loop: false });
+  assert.deepEqual(runRequest("I want to run a 15k, suggest a route through the city"), { distanceKm: 15, paceMinPerKm: 6, loop: false, distanceGiven: true });
   assert.equal(runRequest("10 km run along the water")?.distanceKm, 10);
   assert.equal(runRequest("easy 5k jog")?.distanceKm, 5);
   assert.equal(runRequest("10 mile long run")?.distanceKm, 16.1);
@@ -21,12 +21,22 @@ test("pace and loops are optional", () => {
 });
 
 test("a pace or a distance loop means a run even without the word", () => {
-  assert.deepEqual(runRequest("10k loop at 5:30/km, start near the CN Tower"), { distanceKm: 10, paceMinPerKm: 5.5, loop: true });
+  assert.deepEqual(runRequest("10k loop at 5:30/km, start near the CN Tower"), { distanceKm: 10, paceMinPerKm: 5.5, loop: true, distanceGiven: true });
   assert.equal(runRequest("8k loop around high park")?.loop, true);
   assert.equal(runRequest("12 km at 5:00/km")?.distanceKm, 12);
 });
 
+test("a run without a distance is still a run, about 5 km", () => {
+  assert.deepEqual(runRequest("running route"), { distanceKm: 5, paceMinPerKm: 6, loop: false, distanceGiven: false });
+  assert.equal(runRequest("want to go for a run along the lake")?.distanceKm, 5);
+  assert.equal(runRequest("easy jog this morning")?.distanceKm, 5);
+  assert.equal(runRequest("running loop near high park")?.loop, true);
+  assert.equal(runRequest("a route for runners at 5:30/km")?.paceMinPerKm, 5.5);
+});
+
 test("other requests aren't runs", () => {
+  assert.equal(runRequest("running late, quick dinner downtown"), null, "running late");
+  assert.equal(runRequest("bars where the night runs late"), null, "runs late is not a run");
   assert.equal(runRequest("a 5k fun walk"), null, "no running word");
   assert.equal(runRequest("dinner for 2, run by a great chef"), null, "no distance");
   assert.equal(runRequest("cheap dumplings"), null);
@@ -40,4 +50,11 @@ test("running times, distance tolerance and pace labels", () => {
   assert.equal(paceLabel(6), "6:00/km");
   assert.equal(paceLabel(5.5), "5:30/km");
   assert.equal(paceLabel(4.97), "4:58/km");
+});
+
+test("a run without a distance gets 5k, 10k and 15k to pick from, and the answer reads as a run", () => {
+  const choices = runChoices("running route");
+  assert.deepEqual(choices.options, ["5k", "10k", "15k"]);
+  for (const option of choices.options) assert.equal(runRequest(`${choices.base} — ${option}`)?.distanceGiven, true, option);
+  assert.equal(runRequest("running route — 8 km")?.distanceKm, 8);
 });

@@ -5,7 +5,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.135.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 import { checkBudget, fitsPerPerson, parseBudget, statedBudget } from "./budget.ts";
 import { dayPart, notBefore } from "./daytime.ts";
-import { runDistanceFits, runRequest, runSeconds, type RunRequest } from "./run.ts";
+import { RUN_QUESTION, runChoices, runDistanceFits, runRequest, runSeconds, type RunRequest } from "./run.ts";
 import { eventTimingProblems, type TimedStop } from "./timing.ts";
 import { dayPartMinutes, relativeDay, requestedStart, torontoDay } from "./when.ts";
 import { leavesTooMuchTime, minutesLeftTonight, statedDuration } from "./fill.ts";
@@ -104,6 +104,16 @@ interface GuideRequest {
   budgetMin?: number | null;
   budgetLimit?: number | null;
   partySize?: number;
+  /** The prompt answers the goose's follow-up question, so it shouldn't ask another. */
+  answered?: boolean;
+}
+
+/** A follow-up question with tappable answers (src/lib/choices.ts on the app side). */
+interface Choices {
+  options: string[];
+  base: string;
+  other: string;
+  unit?: string | null;
 }
 
 interface RequestedDateRange {
@@ -425,6 +435,11 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
   if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Expected a JSON object" }, 400);
   const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, 1200) : "";
   if (!prompt) return json({ error: "prompt is required" }, 400);
+  const answered = body.answered === true;
+  // "I want to run a 15k": a running route of about that distance, on foot the whole way.
+  const run = runRequest(prompt);
+  // A run with no distance ("running route") gets 5k / 10k / 15k / Other first. No Claude call, so it costs nothing.
+  if (run && !run.distanceGiven && !answered) return json({ message: RUN_QUESTION, walk: null, choices: runChoices(prompt) });
 
   // Once this month's place searches are used up, nothing more is planned until the 1st.
   const { data: placesUsed, error: quotaError } = await db.rpc("quota_used", { p_service: "google_places" });
@@ -463,8 +478,6 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
   const searchOrigin = origin ?? DOWNTOWN;
   const freeOnly = body.freeOnly === true;
   const travel = body.travel === "walk" || body.travel === "transit" ? body.travel : "flexible";
-  // "I want to run a 15k": a running route of about that distance, on foot the whole way.
-  const run = runRequest(prompt);
   const allowTransit = !run && travel !== "walk";
   // The planner's budget buttons win; otherwise a budget typed in the message ("under $50") is just as binding.
   const spend = parseBudget(body.budgetLimit, body.partySize, body.budgetMin) ?? statedBudget(prompt);
@@ -497,6 +510,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
         run,
         requestedDateRange: targetDates?.label ?? null,
         startLabel: askedStart ? torontoLabel(askedStart) : null,
+        answered,
       })}\n\nRequest: ${prompt}`,
     },
   ];
@@ -505,6 +519,8 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
   const known = new Map<string, Item>();
   let finalText = "";
   let presented: PresentWalkInput | null = null;
+  // Set inside the tool callbacks below; the cast keeps TypeScript from narrowing it to null.
+  let asked = null as { question: string; choices: Choices } | null;
   let validatedStops: WalkStop[] | null = null;
   let askedToFill = false;
   let runRetries = 0;
@@ -590,6 +606,15 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
               filtered.forEach((p) => known.set(p.id, p)); // kept in memory for this request only: Google's policy does not allow storing Places content beyond place IDs
               return { type: "tool_result", tool_use_id: tool.id, content: JSON.stringify({ count: filtered.length, places: filtered.map(placeForModel) }) };
             }
+            if (tool.name === "ask_choices") {
+              const options = Array.isArray(input.options) ? input.options.filter((o): o is string => typeof o === "string" && o.trim() !== "").slice(0, 4) : [];
+              if (answered || options.length < 2) {
+                return { type: "tool_result", tool_use_id: tool.id, content: "They already answered; plan the route with what you have.", is_error: true };
+              }
+              const question = typeof input.question === "string" && input.question.trim() ? input.question.trim() : "Honk! What are you in the mood for?";
+              asked = { question, choices: { options, base: prompt, other: typeof input.other === "string" ? input.other : "Tell me more…", unit: null } };
+              return { type: "tool_result", tool_use_id: tool.id, content: "Asked." };
+            }
             if (tool.name === "present_walk") {
               const walk = input as unknown as PresentWalkInput;
               const unknownIds = (walk.stops ?? []).filter((s) => !known.has(s.id) || known.get(s.id)!.kind !== s.kind).map((s) => s.id);
@@ -648,7 +673,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
                 const off = !runDistanceFits(chosen.meters, run.distanceKm);
                 validatedStops = chosen.stops;
                 presented = off
-                  ? { ...chosen.walk, intro: `Heads up: the closest route I could find is ${(chosen.meters / 1000).toFixed(1)} km, not quite the ${run.distanceKm} km you asked for. ${chosen.walk.intro}` }
+                  ? { ...chosen.walk, intro: `Heads up: the closest route I could find is ${(chosen.meters / 1000).toFixed(1)} km, not quite the ${run.distanceKm} km ${run.distanceGiven ? "you asked for" : "I aimed for"}. ${chosen.walk.intro}` }
                   : chosen.walk;
                 return { type: "tool_result", tool_use_id: tool.id, content: "Route presented." };
               }
@@ -717,6 +742,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
           }
         }),
       );
+      if (asked && !presented) return json({ message: asked.question, walk: null, choices: asked.choices });
       if (!presented) {
         const turnsLeft = maxTurns - 1 - turn;
         const nudge: Anthropic.Beta.BetaTextBlockParam[] =

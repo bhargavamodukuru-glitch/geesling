@@ -39,6 +39,8 @@ export interface PlanRequest {
   budgetLimit?: number | null;
   /** How many people the budget covers. */
   partySize?: number;
+  /** The prompt answers the goose's follow-up question (src/lib/choices.ts), so it won't ask again. */
+  answered?: boolean;
 }
 
 interface Option<T extends string> {

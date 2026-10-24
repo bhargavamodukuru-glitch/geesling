@@ -7,15 +7,22 @@ export interface RunRequest {
   paceMinPerKm: number;
   /** Finish back where it started. */
   loop: boolean;
+  /** False when they asked for a run without a distance and got the default. */
+  distanceGiven: boolean;
 }
 
 export const DEFAULT_PACE_MIN_PER_KM = 6;
+/** A run asked for without a distance ("running route", "go for a jog") is about this long. */
+export const DEFAULT_RUN_KM = 5;
 const KM_PER_MILE = 1.609344;
 
 /** How far off the target a route may be, either way. */
 export const RUN_DISTANCE_TOLERANCE = 0.15;
 
-/** A running request with a distance, or null for everything else ("5k people", "a 10 km walk" aren't runs). */
+/**
+ * A running request, or null for everything else ("5k people", "a 10 km walk", "run by a chef" aren't runs).
+ * Without a distance it needs a clear running phrase ("running route", "go for a run", "jog") and gets DEFAULT_RUN_KM.
+ */
 export function runRequest(prompt: string): RunRequest | null {
   const text = prompt.toLowerCase();
   const raceName = /\bhalf[- ]?marathon\b/.test(text) ? 21.1 : /\bmarathon\b/.test(text) ? 42.2 : null;
@@ -32,7 +39,13 @@ export function runRequest(prompt: string): RunRequest | null {
     if (km) distanceKm = Number(km[1]);
     else if (miles) distanceKm = Number(miles[1]) * KM_PER_MILE;
   }
-  if (distanceKm === null || !Number.isFinite(distanceKm) || distanceKm < 1 || distanceKm > 50) return null;
+  const distanceGiven = distanceKm !== null;
+  if (distanceKm === null) {
+    const clearlyRunning = /\b(running (?:route|path|loop|trail|tour)|(?:go|going|went) (?:for )?(?:a )?(?:run|jog)|(?:a|my|morning|evening|easy|quick|long|tempo) (?:run|jog)|jog|jogging|runners?)\b/.test(text);
+    if (!clearlyRunning || /\brunning (?:late|out|errands)\b/.test(text)) return null;
+    distanceKm = DEFAULT_RUN_KM;
+  }
+  if (!Number.isFinite(distanceKm) || distanceKm < 1 || distanceKm > 50) return null;
 
   let pace = DEFAULT_PACE_MIN_PER_KM;
   const perKm = /\b(\d{1,2}):([0-5]\d)\s*(?:\/|per|a)?\s*(?:km|k|kilometers?|kilometres?)\b|\b(\d{1,2}):([0-5]\d)\s*(?:min(?:ute)?s?\s*)?pace\b/.exec(text);
@@ -42,7 +55,7 @@ export function runRequest(prompt: string): RunRequest | null {
   if (pace < 2.5 || pace > 12) pace = DEFAULT_PACE_MIN_PER_KM;
 
   const loop = /\b(loop|back to (?:the )?start|back where i started|out and back|out-and-back|round trip|circuit)\b/.test(text);
-  return { distanceKm: Math.round(distanceKm * 10) / 10, paceMinPerKm: Math.round(pace * 100) / 100, loop };
+  return { distanceKm: Math.round(distanceKm * 10) / 10, paceMinPerKm: Math.round(pace * 100) / 100, loop, distanceGiven };
 }
 
 /** Running time for a distance at a pace, seconds. */
@@ -62,3 +75,14 @@ export function paceLabel(paceMinPerKm: number): string {
   const seconds = Math.round((paceMinPerKm - whole) * 60);
   return seconds === 60 ? `${whole + 1}:00/km` : `${whole}:${String(seconds).padStart(2, "0")}/km`;
 }
+
+/**
+ * The question for a run asked without a distance ("running route"): 5k, 10k, 15k or Other.
+ * Same shape as Choices in src/lib/choices.ts.
+ */
+export function runChoices(prompt: string): { options: string[]; base: string; other: string; unit: string } {
+  return { options: ["5k", "10k", "15k"], base: prompt, other: "How far? Or tell me where you'd like to run", unit: "km" };
+}
+
+/** What the goose says with the run question. */
+export const RUN_QUESTION = "Honk! Love a runner. How far are we going today?";
