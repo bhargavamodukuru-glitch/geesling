@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { paceLabel, runChoices, runDistanceFits, runRequest, runSeconds } from "../supabase/functions/geesling/run.ts";
+import { paceLabel, runChoices, withoutStatedDistance, runDistanceFits, runRequest, runSeconds } from "../supabase/functions/geesling/run.ts";
 
 test("a runner's request reads its distance", () => {
   assert.deepEqual(runRequest("I want to run a 15k, suggest a route through the city"), { distanceKm: 15, paceMinPerKm: 6, loop: false, distanceGiven: true });
@@ -57,4 +57,13 @@ test("a run without a distance gets 5k, 10k and 15k to pick from, and the answer
   assert.deepEqual(choices.options, ["5k", "10k", "15k"]);
   for (const option of choices.options) assert.equal(runRequest(`${choices.base} — ${option}`)?.distanceGiven, true, option);
   assert.equal(runRequest("running route — 8 km")?.distanceKm, 8);
+});
+
+test("the goose's guesses at distance and time are taken out of a run's intro", () => {
+  const intro = "Honk! Lace up, we're going lakeside. Follow the Martin Goodman Trail west. Flat, paved and mostly car-free. Roughly 10k.";
+  assert.equal(withoutStatedDistance(intro, "x"), "Honk! Lace up, we're going lakeside. Follow the Martin Goodman Trail west. Flat, paved and mostly car-free.");
+  assert.equal(withoutStatedDistance("Great views. It's about 5 km and under an hour.", "x"), "Great views.");
+  assert.equal(withoutStatedDistance("Keep it to 5:30/km on the bridge!", "x"), "x", "nothing left, so the fallback");
+  assert.equal(withoutStatedDistance("Past 3 parks and 2 bridges.", "x"), "Past 3 parks and 2 bridges.", "counts of things stay");
+  assert.equal(withoutStatedDistance("Start at the 5k marker? No, the lighthouse.", "x"), "No, the lighthouse.");
 });

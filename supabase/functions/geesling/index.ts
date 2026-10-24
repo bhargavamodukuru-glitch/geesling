@@ -5,7 +5,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.135.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.118.0";
 import { checkBudget, fitsPerPerson, parseBudget, statedBudget } from "./budget.ts";
 import { dayPart, notBefore } from "./daytime.ts";
-import { RUN_QUESTION, runChoices, runDistanceFits, runRequest, runSeconds, type RunRequest } from "./run.ts";
+import { RUN_QUESTION, runChoices, runDistanceFits, runRequest, runSeconds, withoutStatedDistance, type RunRequest } from "./run.ts";
 import { eventTimingProblems, type TimedStop } from "./timing.ts";
 import { dayPartMinutes, relativeDay, requestedStart, torontoDay } from "./when.ts";
 import { leavesTooMuchTime, minutesLeftTonight, statedDuration } from "./fill.ts";
@@ -616,7 +616,11 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
               return { type: "tool_result", tool_use_id: tool.id, content: "Asked." };
             }
             if (tool.name === "present_walk") {
-              const walk = input as unknown as PresentWalkInput;
+              const given = input as unknown as PresentWalkInput;
+              // Runs: the app shows the measured distance and time, so any the goose states are dropped (rule 13).
+              const walk = run && typeof given.intro === "string" && typeof given.outro === "string"
+                ? { ...given, intro: withoutStatedDistance(given.intro, "Honk! Lace up, here's your route."), outro: withoutStatedDistance(given.outro, "Honk, nice run!") }
+                : given;
               const unknownIds = (walk.stops ?? []).filter((s) => !known.has(s.id) || known.get(s.id)!.kind !== s.kind).map((s) => s.id);
               if (!Array.isArray(walk.stops) || walk.stops.length === 0) {
                 return { type: "tool_result", tool_use_id: tool.id, content: "A walk needs at least one stop.", is_error: true };

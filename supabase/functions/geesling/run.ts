@@ -86,3 +86,12 @@ export function runChoices(prompt: string): { options: string[]; base: string; o
 
 /** What the goose says with the run question. */
 export const RUN_QUESTION = "Honk! Love a runner. How far are we going today?";
+
+// "Roughly 10k", "about 5 km", "under an hour at 6:00/km": the app shows the measured numbers, so the goose doesn't guess them.
+const STATED_DISTANCE_OR_TIME = /\b\d+(?:\.\d+)?\s*(?:k|km|kms|kilomet(?:er|re)s?|mi|miles?|h|hrs?|hours?|min(?:ute)?s?)\b|\b(?:an?|one|half an?) hour\b|\b\d{1,2}:[0-5]\d\s*(?:\/|per)\s*(?:km|mi)/i;
+
+/** The goose's line without sentences that state a distance or time, or `fallback` if nothing else is left. */
+export function withoutStatedDistance(text: string, fallback: string): string {
+  const kept = text.split(/(?<=[.!?…])\s+/).filter((sentence) => !STATED_DISTANCE_OR_TIME.test(sentence));
+  return kept.join(" ").trim() || fallback;
+}
