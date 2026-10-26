@@ -1,6 +1,7 @@
 import { Platform, type TextStyle, type ViewStyle } from "react-native";
+import { HALLOWEEN } from "./season";
 
-export const colors = {
+const everyday = {
   parchment: "#F6E7C1",
   parchmentDark: "#EAD3A0",
   paper: "#FFF8E6",
@@ -22,6 +23,17 @@ export const colors = {
   white: "#FFFFFF",
   shadow: "#2A1A0C",
 };
+
+// Halloween week (src/lib/season.ts): pumpkin orange and witchy purple in place of red and brown.
+const halloween: Partial<typeof everyday> = {
+  accent: "#D9561A",
+  gold: "#F5A524",
+  wood: "#5B2E7A",
+  woodDark: "#3A1B52",
+  inkSoft: "#5A3D52",
+};
+
+export const colors = { ...everyday, ...(HALLOWEEN ? halloween : {}) };
 
 export const fonts = {
   heading: "PixelifySans_700Bold",

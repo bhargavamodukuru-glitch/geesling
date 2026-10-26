@@ -511,6 +511,10 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
         requestedDateRange: targetDates?.label ?? null,
         startLabel: askedStart ? torontoLabel(askedStart) : null,
         answered,
+        halloween: (() => {
+          const day = torontoDay(start);
+          return day.month === 9 && day.day >= 20; // October 20–31, matching src/lib/season.ts
+        })(),
       })}\n\nRequest: ${prompt}`,
     },
   ];

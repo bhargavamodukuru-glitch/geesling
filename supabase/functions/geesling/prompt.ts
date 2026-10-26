@@ -147,6 +147,8 @@ export function contextBlock(args: {
   startLabel?: string | null;
   /** They are answering a question you asked: don't ask another. */
   answered?: boolean;
+  /** The route is for Halloween week (October 20–31). */
+  halloween?: boolean;
 }): string {
   return [
     `Current time in Toronto: ${args.nowLabel} (${args.nowIso}).`,
@@ -166,6 +168,9 @@ export function contextBlock(args: {
       : "",
     args.run
       ? `RUN MODE: they want to run about ${args.run.distanceKm} km${args.run.distanceGiven ? "" : " (they didn't say how far; this is a default)"} at about ${paceLabel(args.run.paceMinPerKm)}${args.run.loop ? ", as a loop back to the start" : ""}. Plan a running route (rule 13), not an outing. Every leg is on foot: never suggest the TTC.`
+      : "",
+    args.halloween
+      ? "It's Halloween week in Toronto. When it fits the request, favour Halloween events (parties, costume nights, haunted walks, spooky screenings, pumpkin patches) and give your lines a light spooky touch. Don't force it on runs or requests that clearly want something else."
       : "",
     args.answered ? "They just answered your follow-up question (after the —). Don't call ask_choices; plan the route." : "",
     args.travel === "walk" ? "They are travelling on foot only: never route by transit, and keep every stop within walking distance of the previous one." : "",

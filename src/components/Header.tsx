@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Goose } from "@/components/Goose";
 import { PixelButton } from "@/components/Pixel";
+import { HALLOWEEN } from "@/lib/season";
 import { colors, fonts } from "@/lib/theme";
 
 interface Props {
@@ -15,7 +16,7 @@ export function Header({ onRefresh }: Props) {
       <Goose size={2} walking={false} />
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>GEESLING</Text>
-        <Text style={styles.sub}>Toronto · {dateLabel.format(new Date())}</Text>
+        <Text style={styles.sub}>Toronto · {dateLabel.format(new Date())}{HALLOWEEN ? " · 🎃 Spooky season" : ""}</Text>
       </View>
       {onRefresh ? <PixelButton label="↻" small onPress={onRefresh} accessibilityLabel="Refresh events" /> : null}
     </View>

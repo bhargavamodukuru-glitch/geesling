@@ -10,10 +10,14 @@ import { askGeesling } from "@/lib/api";
 import { answerPrompt, type Choices } from "@/lib/choices";
 import { OUT_OF_AREA_MESSAGE, mentionsOtherPlace } from "@/lib/area";
 import { MAX_RETRIES, buildRetryRequest, type LatLng, type PlanRequest } from "@/lib/planner";
+import { HALLOWEEN } from "@/lib/season";
 import { colors, fonts, text } from "@/lib/theme";
 import { itemTitle, type ChatMessage, type MapItem, type Walk } from "@/lib/types";
 
+const HALLOWEEN_VIBE = { label: "Halloween night", icon: "🎃", prompt: "It's Halloween week! Plan me a spooky, fun outing: Halloween events, parties or haunted spots, plus somewhere good to eat." };
+
 const VIBES: { label: string; icon: string; prompt: string }[] = [
+  ...(HALLOWEEN ? [HALLOWEEN_VIBE] : []),
   { label: "Step outside your comfort zone", icon: "🔥", prompt: "I'm looking to step out of my comfort zone. Where in Toronto is best to do this right now?" },
   { label: "Low-key chill", icon: "🌙", prompt: "Plan me a low-key, chill few hours — cozy spots, nothing too loud." },
   { label: "Meet people", icon: "🤝", prompt: "I want to meet new people. Find social events and spots where it's easy to start talking to strangers." },
@@ -173,7 +177,7 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
               <Panel style={styles.bubble} shadow={3}>
                 <Text style={styles.speaker}>GEESLING</Text>
                 <Text style={text.body}>
-                  Honk! Tell me your vibe and how much time you’ve got. I’ll waddle you around the city — real events happening now, plus spots that are always open.
+                  {HALLOWEEN ? "Honk-o-ween! " : "Honk! "}Tell me your vibe and how much time you’ve got. I’ll waddle you around the city — real events happening now, plus spots that are always open.
                 </Text>
               </Panel>
             </View>

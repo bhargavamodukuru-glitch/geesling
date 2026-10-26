@@ -5,6 +5,7 @@ import { Goose } from "@/components/Goose";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { TorontoPixelBackdrop } from "@/components/TorontoPixelBackdrop";
 import { isNight } from "@/lib/daylight";
+import { HALLOWEEN } from "@/lib/season";
 import { DEFAULT_PREFERENCES, buildPlanRequest, type LatLng, type PlanRequest } from "@/lib/planner";
 import { colors, fonts, text } from "@/lib/theme";
 
@@ -14,8 +15,8 @@ interface Props {
   userLocation: LatLng | null;
 }
 
-/** Example requests that fade in and out in the empty message box. */
-const SAMPLES = [
+/** Example requests that fade in and out in the empty message box (spooky ones in Halloween week). */
+const EVERYDAY_SAMPLES = [
   "im bored and want a sweet treat, then I just want to see whats happening",
   "i have a date soon and need some cute ideas, maybe a good dinner spot followed by ice cream",
   "free stuff to do with friends tonight, nothing too loud",
@@ -23,6 +24,15 @@ const SAMPLES = [
   "rainy afternoon: a cozy café, a bookstore and maybe a gallery",
   "in town for the day, cheap eats and the best views",
 ];
+const HALLOWEEN_SAMPLES = [
+  "best halloween parties this weekend, nothing too pricey",
+  "a haunted walk downtown, then a cozy spooky bar",
+  "pumpkin patch and apple cider with friends",
+  "costume shopping, then a halloween club night",
+  "a scary movie screening and late-night tacos",
+  "something halloween-y but chill for a date",
+];
+const SAMPLES = HALLOWEEN ? HALLOWEEN_SAMPLES : EVERYDAY_SAMPLES;
 const SAMPLE_MS = 3800;
 const FADE_MS = 450;
 
@@ -98,6 +108,20 @@ function useSample(active: boolean) {
   return { sample: SAMPLES[index], opacity };
 }
 
+/** Bats in the sky and pumpkins on the grass, for Halloween week. Decoration only. */
+function HalloweenDecor() {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+      <Text style={[styles.decor, { top: "9%", left: "12%", fontSize: 26 }]}>🦇</Text>
+      <Text style={[styles.decor, { top: "17%", left: "34%", fontSize: 20, transform: [{ scaleX: -1 }] }]}>🦇</Text>
+      <Text style={[styles.decor, { top: "5%", right: "38%", fontSize: 16 }]}>🦇</Text>
+      <Text style={[styles.decor, { bottom: 18, left: "4%", fontSize: 30 }]}>🎃</Text>
+      <Text style={[styles.decor, { bottom: 16, right: "5%", fontSize: 26 }]}>🎃</Text>
+      <Text style={[styles.decor, { bottom: 20, left: "47%", fontSize: 20 }]}>👻</Text>
+    </View>
+  );
+}
+
 /** Fades and lifts children in once `show` turns true, after `delay` ms. */
 function Reveal({ show, delay = 0, children }: { show: boolean; delay?: number; children: React.ReactNode }) {
   const [progress] = useState(() => new Animated.Value(0));
@@ -149,6 +173,7 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation }: Props) {
   return (
     <SafeAreaView style={[styles.screen, nightMode && styles.nightScreen]} edges={["top", "left", "right", "bottom"]}>
       <TorontoPixelBackdrop nightMode={nightMode} />
+      {HALLOWEEN ? <HalloweenDecor /> : null}
       <ScrollView contentContainerStyle={styles.center} keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
           <View style={styles.metaRow}>
@@ -172,15 +197,17 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation }: Props) {
             </Animated.View>
             <View style={{ gap: 0 }}>
               <Text style={[styles.wordmark, nightMode && styles.nightWordmark]}>GEESLING</Text>
-              <Text style={[styles.submark, nightMode && styles.nightSubmark]}>WANDER, WITH GOOSEY GANDER</Text>
+              <Text style={[styles.submark, nightMode && styles.nightSubmark]}>{HALLOWEEN ? "TRICK, TREAT & WANDER" : "WANDER, WITH GOOSEY GANDER"}</Text>
             </View>
           </View>
 
           <View style={styles.conversation} accessibilityLabel="Chat with Geesling">
             <Reveal show={ready}>
               <Panel style={styles.greeting} shadow={3}>
-                <Text style={styles.honk}>HONK!</Text>
-                <Text style={[text.body, styles.centered]}>Unsure what to do? Let me waddle you around the city.</Text>
+                <Text style={styles.honk}>{HALLOWEEN ? "HONK-O-WEEN!" : "HONK!"}</Text>
+                <Text style={[text.body, styles.centered]}>
+                  {HALLOWEEN ? "Spooky season’s here. Let me waddle you to the city’s best Halloween haunts." : "Unsure what to do? Let me waddle you around the city."}
+                </Text>
               </Panel>
             </Reveal>
 
@@ -216,7 +243,7 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation }: Props) {
 
             <Reveal show={ready} delay={650}>
               <View style={styles.sendRow}>
-                <PixelButton label="Surprise me" icon="🎲" onPress={surprise} />
+                <PixelButton label={HALLOWEEN ? "Trick or treat me" : "Surprise me"} icon={HALLOWEEN ? "🎃" : "🎲"} onPress={surprise} />
                 <PixelButton label="Find my route" tone="red" disabled={!prompt.trim()} onPress={submit} />
               </View>
             </Reveal>
@@ -278,5 +305,6 @@ const styles = StyleSheet.create({
   // Sits over the empty input in the same spot as typed text would.
   // Exactly three lines tall, so a long sample is cut off with "…" instead of peeking out a fourth line.
   sample: { position: "absolute", top: 16, left: 16, right: 16, minHeight: 0, paddingVertical: 0, lineHeight: 24, maxHeight: 24 * 3, overflow: "hidden", color: colors.inkSoft },
+  decor: { position: "absolute" },
   sendRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 10 },
 });

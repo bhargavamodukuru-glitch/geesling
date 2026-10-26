@@ -1,7 +1,8 @@
 import { memo, useEffect, useState } from "react";
 import { View } from "react-native";
+import { HALLOWEEN } from "@/lib/season";
 
-// 14×16 pixel Canada goose in a red Toronto toque, facing right. Two walking frames.
+// 14×16 pixel Canada goose in a red Toronto toque (a witch hat in Halloween week), facing right. Two walking frames.
 const BODY = [
   "........RRR...",
   ".......RRRRR..",
@@ -18,6 +19,14 @@ const BODY = [
   "WWBDDDDDBBBB..",
   ".WBBDDDDBBBB..",
 ];
+// Halloween week: a purple witch hat with an orange band instead of the toque.
+const WITCH_HAT = [
+  ".........PP...",
+  "........PPPP..",
+  "......PPAAAPP.",
+];
+const SPRITE = HALLOWEEN ? [...WITCH_HAT, ...BODY.slice(3)] : BODY;
+
 const LEGS_A = ["....K...K.....", "...KK..KK....."];
 const LEGS_B = [".....K.K......", "....KK.KK....."];
 
@@ -29,6 +38,8 @@ const PALETTE: Record<string, string> = {
   O: "#2B2B2B",
   B: "#B08A5C",
   D: "#6E4B2A",
+  P: "#4B2266",
+  A: "#E8731F",
 };
 
 interface Props {
@@ -46,13 +57,13 @@ function GooseSprite({ size = 4, walking = true, flapping = false, flip = false 
     return () => clearInterval(id);
   }, [walking, flapping]);
 
-  const body = flapping ? BODY.map((row, y) => {
+  const body = flapping ? SPRITE.map((row, y) => {
     // Pixel wings lift and lower around Geesling's body in alternating frames.
     const wing = frame === 0
       ? ({ 7: "..W.........W.", 8: ".WW.........WW", 9: "WW...........W" } as Record<number, string>)[y]
       : ({ 9: "..............", 10: ".WW.........WW", 11: "..WW.......WW." } as Record<number, string>)[y];
     return wing ? row.split("").map((cell, x) => wing[x] === "W" ? "W" : cell).join("") : row;
-  }) : BODY;
+  }) : SPRITE;
   const rows = [...body, ...(walking && !flapping ? (frame === 0 ? LEGS_A : LEGS_B) : LEGS_A)];
   return (
     <View
