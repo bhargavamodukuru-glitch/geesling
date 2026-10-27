@@ -121,6 +121,7 @@ Deno.serve(async (req) => {
   });
   const part = url.searchParams.get("part") ?? "summary";
   if (part === "comments") {
+    const REVIEW_AT_REPORTS = 3;
     const { data: comments, error: commentsError } = await db.rpc("comments_report");
     if (commentsError) {
       console.error("comments_report failed", commentsError.message);
@@ -136,7 +137,8 @@ Deno.serve(async (req) => {
         c.nickname,
         c.body,
         c.report_count,
-        c.hidden ? "Hidden" : "Visible",
+        // Ordinary reports no longer hide a comment (free accounts); a team member hides it with one Report tap.
+        c.hidden ? "Hidden" : c.report_count >= REVIEW_AT_REPORTS ? "Needs review" : "Visible",
         c.source,
       ]),
     ];

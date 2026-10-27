@@ -17,6 +17,19 @@ const PLATFORMS: { hosts: string[]; label: string; platform: string }[] = [
   { hosts: ["beacons.ai"], label: "Beacons", platform: "beacons" },
 ];
 
+/** The link if it is an absolute http(s) URL, otherwise null. Listing and place links are third-party data, so
+ *  anything else (javascript:, data:, app schemes) is never opened. */
+export function webLink(value: string | null | undefined): string | null {
+  const text = value?.trim();
+  if (!text) return null;
+  try {
+    const url = new URL(text);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 const URL_PATTERN = /(?:https?:\/\/)?(?:www\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:[a-z]{2,})(?:\/[^\s<>"')\]]*)?/gi;
 
 /** Build compact link buttons from URLs explicitly included with the listing. */

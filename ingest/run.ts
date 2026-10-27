@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import type { IngestConfig, NormalizedEvent, SourceId, SourceResult } from "./lib/types.ts";
 import { dedupe } from "./lib/dedupe.ts";
+import { withWebLinks } from "./lib/url.ts";
 import { deleteStale, enabledEventbriteOrganizers, finishRun, startRun, storedEvents, upsertEvents, type Db } from "./lib/supabase.ts";
 import { fetchToronto } from "./sources/toronto.ts";
 import { fetchTicketmaster } from "./sources/ticketmaster.ts";
@@ -57,7 +58,7 @@ async function main(): Promise<void> {
     const source = jobs[i][0];
     if (result.status === "fulfilled") {
       succeeded.push(source);
-      fresh.push(...result.value.events);
+      fresh.push(...result.value.events.map(withWebLinks));
       (stats.sources as Record<string, unknown>)[source] = {
         ok: true,
         fetched: result.value.fetched,

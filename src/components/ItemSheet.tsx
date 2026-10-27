@@ -6,7 +6,7 @@ import { useSaved } from "@/hooks/useSaved";
 import { placeType, priceLabel, whenLabel } from "@/lib/format";
 import { openDirections } from "@/lib/links";
 import { isTopRated } from "@/lib/placeBadges";
-import { descriptionWithoutLinks, socialLinksForItem } from "@/lib/socialLinks";
+import { descriptionWithoutLinks, socialLinksForItem, webLink } from "@/lib/socialLinks";
 import { CATEGORY_LABELS, colors, fonts, text } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
 
@@ -29,7 +29,9 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
   const free = item.is_free;
   const isPhotoSpot = item.kind === "place" && item.types.includes("photography_spot");
   const title = item.kind === "event" ? item.title : item.name;
-  const link = item.kind === "event" ? (item.ticket_url ?? item.url) : item.website;
+  const link = webLink(item.kind === "event" ? (item.ticket_url ?? item.url) : item.website);
+  const mapsLink = item.kind === "place" ? webLink(item.maps_url) : null;
+  const imageLink = item.kind === "event" ? webLink(item.image_url) : null;
   const socialLinks = socialLinksForItem(item);
   const description = descriptionWithoutLinks(item);
 
@@ -53,7 +55,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={{ gap: 8 }}>
-        {item.kind === "event" && item.image_url && (maxHeight === undefined || maxHeight > 420) ? <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" /> : null}
+        {imageLink && (maxHeight === undefined || maxHeight > 420) ? <Image source={{ uri: imageLink }} style={styles.image} resizeMode="cover" /> : null}
 
         {note ? (
           <View style={styles.note}>
@@ -109,8 +111,8 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
       <View style={styles.actions}>
         <PixelButton label="On foot" icon="🦶" tone="gold" small onPress={() => openDirections(item)} />
         <PixelButton label="TTC" icon="🚋" small onPress={() => openDirections(item, true)} />
-        {item.kind === "place" && item.maps_url ? (
-          <PixelButton label="Google Maps & reviews" small onPress={() => void Linking.openURL(item.maps_url!)} />
+        {mapsLink ? (
+          <PixelButton label="Google Maps & reviews" small onPress={() => void Linking.openURL(mapsLink)} />
         ) : null}
         {link ? (
           <PixelButton

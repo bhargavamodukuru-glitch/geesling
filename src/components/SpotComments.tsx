@@ -125,7 +125,7 @@ export function SpotComments({ item }: { item: MapItem }) {
         />
         {error ? <Text style={[text.small, styles.error]}>{error}</Text> : null}
         <PixelButton label={busy ? "Posting…" : "Post comment"} small tone="gold" disabled={!body.trim() || !nickname.trim() || busy} onPress={() => void post()} style={styles.post} />
-        <Text style={styles.fine}>Comments are public. Be kind; reported comments are hidden.</Text>
+        <Text style={styles.fine}>Comments are public. Be kind; reported comments are reviewed and may be removed.</Text>
       </View>
     </View>
   );
