@@ -23,6 +23,12 @@ export interface PlaceItem {
   summary: string | null;
   open_now: boolean | null;
   hours: string[] | null;
+  /** "city" for a City of Toronto open data spot (city.ts); missing or "google" for Google Places. */
+  source?: "google" | "city";
+  city_kind?: string;
+  image_url?: string | null;
+  /** A CaféTO patio licence at this address (city.ts hasPatio). */
+  has_patio?: boolean;
   /** Transient review evidence for recommendation quality; never cached or saved with walks. */
   review_evidence?: Array<{ rating: number; text: string; published: string | null; author: string | null; url: string | null }>;
 }

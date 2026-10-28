@@ -88,3 +88,25 @@ export async function deleteStale(db: Db, sources: SourceId[], runId: string): P
   });
   await request(db, "rpc/purge_stale", { method: "POST", body: "{}" });
 }
+
+/** Saves city spots for this run (city-spots.ts), 500 at a time. */
+export async function upsertCitySpots(db: Db, spots: Array<Record<string, unknown>>, runId: string): Promise<void> {
+  const now = new Date().toISOString();
+  for (let i = 0; i < spots.length; i += 500) {
+    const chunk = spots.slice(i, i + 500).map((s) => ({ ...s, run_id: runId, updated_at: now }));
+    await request(db, "city_spots?on_conflict=id", {
+      method: "POST",
+      body: JSON.stringify(chunk),
+      prefer: "resolution=merge-duplicates,return=minimal",
+    });
+  }
+}
+
+/** Removes city spots from these sources that this run no longer has (gone from the dataset). */
+export async function deleteOldCitySpots(db: Db, sources: string[], runId: string): Promise<void> {
+  if (sources.length === 0) return;
+  await request(db, `city_spots?source=in.(${sources.join(",")})&or=(run_id.is.null,run_id.neq.${runId})`, {
+    method: "DELETE",
+    prefer: "return=minimal",
+  });
+}

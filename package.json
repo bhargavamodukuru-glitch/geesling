@@ -38,6 +38,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p ingest && tsc --noEmit -p tests",
     "ingest": "node --max-old-space-size=4096 ingest/run.ts",
     "ingest:dry": "node --max-old-space-size=4096 ingest/run.ts --dry-run",
+    "city-spots": "node --max-old-space-size=4096 ingest/city-spots.ts",
+    "city-spots:dry": "node --max-old-space-size=4096 ingest/city-spots.ts --dry-run",
     "export:web": "expo export -p web",
     "lint": "expo lint",
     "deploy:web": "expo export -p web && npx eas-cli@latest deploy --prod",

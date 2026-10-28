@@ -1,0 +1,34 @@
+name: City spots
+
+# City of Toronto open data spots (public art, StrollTO, patios, drinking water, fall colours…) → city_spots.
+# The datasets change monthly at most; once a day keeps fountain on/off status fresh.
+on:
+  schedule:
+    - cron: "40 9 * * *" # 05:40 Toronto (EDT)
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ingest/city-spots.ts"
+      - "ingest/lib/citySpots.ts"
+      - ".github/workflows/city-spots.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Import city spots
+        run: node --max-old-space-size=4096 ingest/city-spots.ts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

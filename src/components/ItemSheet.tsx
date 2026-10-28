@@ -5,7 +5,7 @@ import { SpotComments } from "@/components/SpotComments";
 import { useSaved } from "@/hooks/useSaved";
 import { placeType, priceLabel, whenLabel } from "@/lib/format";
 import { openDirections } from "@/lib/links";
-import { isTopRated } from "@/lib/placeBadges";
+import { OPEN_DATA_CREDIT, hasPatio, isCitySpot, isTopRated } from "@/lib/placeBadges";
 import { descriptionWithoutLinks, socialLinksForItem, webLink } from "@/lib/socialLinks";
 import { CATEGORY_LABELS, colors, fonts, text } from "@/lib/theme";
 import type { MapItem } from "@/lib/types";
@@ -31,7 +31,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
   const title = item.kind === "event" ? item.title : item.name;
   const link = webLink(item.kind === "event" ? (item.ticket_url ?? item.url) : item.website);
   const mapsLink = item.kind === "place" ? webLink(item.maps_url) : null;
-  const imageLink = item.kind === "event" ? webLink(item.image_url) : null;
+  const imageLink = webLink(item.image_url);
   const socialLinks = socialLinksForItem(item);
   const description = descriptionWithoutLinks(item);
 
@@ -45,6 +45,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
             {item.involves_alcohol ? <Tag label="🍻 Drinks" color={colors.gold} textColor={colors.ink} /> : null}
             {isPhotoSpot ? <Tag label="📸 Photo spot" color={colors.photoPin} /> : null}
             {isTopRated(item) ? <Tag label="★ Top rated" color={colors.gold} textColor={colors.ink} /> : null}
+            {hasPatio(item) ? <Tag label="☕ Patio" color={colors.parchmentDark} textColor={colors.ink} /> : null}
             {item.kind === "event" && item.age_min ? <Tag label={`${item.age_min}+`} color={colors.ink} /> : null}
           </View>
           <Text style={text.h2} numberOfLines={3}>
@@ -90,7 +91,10 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
                 {description}
               </Text>
             ) : null}
-            <Text style={styles.source}>Listed by {SOURCE_NAMES[item.source] ?? item.source}</Text>
+            <Text style={styles.source}>
+              Listed by {SOURCE_NAMES[item.source] ?? item.source}
+              {item.source === "toronto" ? `. ${OPEN_DATA_CREDIT}` : ""}
+            </Text>
           </>
         ) : (
           <>
@@ -102,7 +106,13 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
             {item.address ? <Text style={text.small}>📍 {item.address}</Text> : null}
             {item.summary ? <Text style={text.small}>{item.summary}</Text> : null}
             {item.hours ? <Text style={text.small}>{item.hours.join("\n")}</Text> : null}
-            <Text style={styles.source}>{isPhotoSpot ? "Curated scenic viewpoint · Check map for current access" : "Place info from Google"}</Text>
+            <Text style={styles.source}>
+              {isCitySpot(item)
+                ? `From City of Toronto open data. ${OPEN_DATA_CREDIT}`
+                : isPhotoSpot
+                  ? "Curated scenic viewpoint · Check map for current access"
+                  : `Place info from Google${item.has_patio ? ". Patio from City of Toronto CaféTO data (seasonal). " + OPEN_DATA_CREDIT : ""}`}
+            </Text>
           </>
         )}
         <SpotComments key={`${item.kind}-${item.id}`} item={item} />

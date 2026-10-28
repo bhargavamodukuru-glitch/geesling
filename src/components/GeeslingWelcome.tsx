@@ -15,8 +15,8 @@ interface Props {
   userLocation: LatLng | null;
 }
 
-/** Example requests that fade in and out in the empty message box (spooky ones in Halloween week). */
-const EVERYDAY_SAMPLES = [
+/** Example requests that fade in and out in the empty message box. */
+const SAMPLES = [
   "im bored and want a sweet treat, then I just want to see whats happening",
   "i have a date soon and need some cute ideas, maybe a good dinner spot followed by ice cream",
   "free stuff to do with friends tonight, nothing too loud",
@@ -24,15 +24,6 @@ const EVERYDAY_SAMPLES = [
   "rainy afternoon: a cozy café, a bookstore and maybe a gallery",
   "in town for the day, cheap eats and the best views",
 ];
-const HALLOWEEN_SAMPLES = [
-  "best halloween parties this weekend, nothing too pricey",
-  "a haunted walk downtown, then a cozy spooky bar",
-  "pumpkin patch and apple cider with friends",
-  "costume shopping, then a halloween club night",
-  "a scary movie screening and late-night tacos",
-  "something halloween-y but chill for a date",
-];
-const SAMPLES = HALLOWEEN ? HALLOWEEN_SAMPLES : EVERYDAY_SAMPLES;
 const SAMPLE_MS = 3800;
 const FADE_MS = 450;
 
@@ -206,7 +197,7 @@ export function GeeslingWelcome({ onAsk, onSkip, userLocation }: Props) {
               <Panel style={styles.greeting} shadow={3}>
                 <Text style={styles.honk}>{HALLOWEEN ? "HONK-O-WEEN!" : "HONK!"}</Text>
                 <Text style={[text.body, styles.centered]}>
-                  {HALLOWEEN ? "Spooky season’s here. Let me waddle you to the city’s best Halloween haunts." : "Unsure what to do? Let me waddle you around the city."}
+                  {HALLOWEEN ? "Spooky season’s here. Let me waddle you around the city." : "Unsure what to do? Let me waddle you around the city."}
                 </Text>
               </Panel>
             </Reveal>

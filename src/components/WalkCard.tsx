@@ -6,7 +6,7 @@ import { clock, distance, minutes, priceLabel } from "@/lib/format";
 import { openWalkInMaps, shareWalk } from "@/lib/links";
 import { DAY_PART_LABEL, SPLIT_WALK_MINUTES, dayPart } from "@/lib/dayParts";
 import { costLine, eventTime, formatDuration, fromFirstStop, runLine, summarizePlan, travelLine } from "@/lib/planSummary";
-import { isTopRated } from "@/lib/placeBadges";
+import { hasPatio, isTopRated } from "@/lib/placeBadges";
 import { transitLabel, transitSteps } from "@/lib/transit";
 import { colors, fonts, text } from "@/lib/theme";
 import { itemTitle, type MapItem, type Walk } from "@/lib/types";
@@ -86,6 +86,7 @@ export function WalkCard({ walk: saved, onShowOnMap, onSelectStop }: Props) {
                 <Text style={text.small}>
                   {clock(stop.arrive_at)}–{clock(stop.leave_at)} · {priceLabel(stop.item)}
                   {stop.item.kind === "place" && isTopRated(stop.item) ? ` · ★ ${stop.item.rating}` : ""}
+                  {hasPatio(stop.item) ? " · ☕ Patio" : ""}
                 </Text>
                 {(() => {
                   // How long you actually get there after travelling, and when an event ends.

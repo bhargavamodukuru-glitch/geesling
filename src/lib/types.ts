@@ -53,6 +53,12 @@ export interface PlaceItem {
   summary: string | null;
   open_now: boolean | null;
   hours: string[] | null;
+  /** "city" for a City of Toronto open data spot (public art, StrollTO, patios…); missing for Google places. */
+  source?: "google" | "city";
+  city_kind?: string;
+  image_url?: string | null;
+  /** A Google place with a CaféTO patio licence at its address. */
+  has_patio?: boolean;
 }
 
 export type MapItem = EventItem | PlaceItem;

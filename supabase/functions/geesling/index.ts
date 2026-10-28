@@ -9,6 +9,7 @@ import { RUN_QUESTION, runChoices, runDistanceFits, runRequest, runSeconds, with
 import { eventTimingProblems, type TimedStop } from "./timing.ts";
 import { dayPartMinutes, relativeDay, requestedStart, torontoDay } from "./when.ts";
 import { leavesTooMuchTime, minutesLeftTonight, statedDuration } from "./fill.ts";
+import { CITY_KINDS, cityForModel, citySpotToPlace, hasPatio, isFallColourSeason, tooDarkForLeaves, usableCitySpot, type CitySpotRow } from "./city.ts";
 import { contextBlock, MODEL, SYSTEM_PROMPT, TOOLS } from "./prompt.ts";
 import { type MaxPrice, type PlaceItem, searchPlaces } from "./places.ts";
 import { bestLeg, type Leg, type RouteMeter } from "./routes.ts";
@@ -259,6 +260,27 @@ function eventForModel(e: EventItem) {
   };
 }
 
+/** Marks Google places that hold a CaféTO patio licence (one bounding-box read of city_spots). Best effort. */
+async function markPatios(db: SupabaseClient, places: PlaceItem[]): Promise<void> {
+  if (!places.length) return;
+  const lats = places.map((p) => p.lat);
+  const lngs = places.map((p) => p.lng);
+  const { data, error } = await db
+    .from("city_spots")
+    .select("name,address,lat,lng")
+    .eq("kind", "patio")
+    .gte("lat", Math.min(...lats) - 0.001)
+    .lte("lat", Math.max(...lats) + 0.001)
+    .gte("lng", Math.min(...lngs) - 0.0013)
+    .lte("lng", Math.max(...lngs) + 0.0013)
+    .limit(500);
+  if (error) {
+    console.error("patio lookup failed", error.message);
+    return;
+  }
+  for (const place of places) place.has_patio = hasPatio(place, data ?? []);
+}
+
 function placeForModel(p: PlaceItem) {
   return {
     id: p.id,
@@ -271,6 +293,7 @@ function placeForModel(p: PlaceItem) {
     is_free: p.is_free,
     rating: p.rating,
     reviews: p.rating_count,
+    patio: p.has_patio === true,
     open_now: p.open_now,
     hours: p.hours,
     google_review_excerpts: p.review_evidence?.map((review) => ({
@@ -511,10 +534,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
         requestedDateRange: targetDates?.label ?? null,
         startLabel: askedStart ? torontoLabel(askedStart) : null,
         answered,
-        halloween: (() => {
-          const day = torontoDay(start);
-          return day.month === 9 && day.day >= 20; // October 20–31, matching src/lib/season.ts
-        })(),
+        fallColours: isFallColourSeason(start) ? (tooDarkForLeaves(start) ? "dark" : "daylight") : null,
       })}\n\nRequest: ${prompt}`,
     },
   ];
@@ -522,6 +542,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
   const client = new Anthropic({ apiKey: anthropicKey });
   const known = new Map<string, Item>();
   let finalText = "";
+  let lastStop: string | null = null;
   let presented: PresentWalkInput | null = null;
   // Set inside the tool callbacks below; the cast keeps TypeScript from narrowing it to null.
   let asked = null as { question: string; choices: Choices } | null;
@@ -561,6 +582,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
         messages.push({ role: "assistant", content: response.content });
         continue;
       }
+      lastStop = response.stop_reason;
       if (response.stop_reason !== "tool_use") break;
 
       const toolUses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
@@ -607,8 +629,27 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
                 : perPersonLimit !== null
                   ? places.filter((p) => fitsPerPerson(p, perPersonLimit))
                   : places;
+              await markPatios(db, filtered);
               filtered.forEach((p) => known.set(p.id, p)); // kept in memory for this request only: Google's policy does not allow storing Places content beyond place IDs
               return { type: "tool_result", tool_use_id: tool.id, content: JSON.stringify({ count: filtered.length, places: filtered.map(placeForModel) }) };
+            }
+            if (tool.name === "search_city_spots") {
+              // City of Toronto open data: free to search, so no quota. Water that's switched off is left out.
+              const near = isLatLng(input.near) ? input.near : searchOrigin;
+              const kinds = Array.isArray(input.kinds) ? input.kinds.filter((k): k is string => typeof k === "string" && (CITY_KINDS as string[]).includes(k)) : [];
+              const { data, error } = await db.rpc("search_city_spots", {
+                q: typeof input.query === "string" && input.query.trim() ? input.query.slice(0, 200) : null,
+                center_lat: near.lat,
+                center_lng: near.lng,
+                radius_m: typeof input.radius_m === "number" ? Math.min(Math.max(input.radius_m, 100), 5000) : 1500,
+                kinds: kinds.length ? kinds : null,
+                lim: typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 15) : 8,
+              });
+              if (error) throw new Error(`search_city_spots failed: ${error.message}`);
+              const rows = ((data ?? []) as CitySpotRow[]).filter(usableCitySpot);
+              const spots = rows.map((row) => ({ row, place: citySpotToPlace(row) })).filter(({ place }) => !freeOnly || place.is_free);
+              spots.forEach(({ place }) => known.set(place.id, place));
+              return { type: "tool_result", tool_use_id: tool.id, content: JSON.stringify({ count: spots.length, spots: spots.map(({ row, place }) => cityForModel(place, row)) }) };
             }
             if (tool.name === "ask_choices") {
               const options = Array.isArray(input.options) ? input.options.filter((o): o is string => typeof o === "string" && o.trim() !== "").slice(0, 4) : [];
@@ -735,7 +776,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
                 return {
                   type: "tool_result",
                   tool_use_id: tool.id,
-                  content: `This walk only fills about ${walkMinutes} of the ${usable} minutes with stops and travel (waiting doesn't count). Add free stops near these ones (park, waterfront, plaza, library, garden, viewpoint, free gallery) with search_places, then present again. If nothing suitable is nearby, present the same stops again and say plainly in the intro that it's a shorter outing. Keep the intro to the stops in the walk.`,
+                  content: `This walk only fills about ${walkMinutes} of the ${usable} minutes with stops and travel (waiting doesn't count). Add free stops near these ones: first try search_city_spots (public art, landmarks, StrollTO and Cultural Hotspot sites, fall colours in season), then search_places for a park, waterfront, plaza, library, garden, viewpoint or free gallery. Then present again. If nothing suitable is nearby, present the same stops again and say plainly in the intro that it's a shorter outing. Keep the intro to the stops in the walk.`,
                   is_error: true,
                 };
               }
@@ -784,7 +825,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
     validatedStops = leftover.stops;
   }
   if (!presented) {
-    console.warn("no walk presented", { turns: messages.length, hadText: finalText !== "", known: known.size });
+    console.warn("no walk presented", { turns: messages.length, hadText: finalText !== "", known: known.size, stop: lastStop });
     return json({ message: finalText || "Honk? Tell me a bit more — what are you in the mood for?", walk: null });
   }
 

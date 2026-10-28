@@ -10,3 +10,16 @@ export const TOP_RATED_MIN_REVIEWS = 20;
 export function isTopRated(item: MapItem): boolean {
   return item.kind === "place" && item.rating !== null && item.rating > TOP_RATED_ABOVE && (item.rating_count ?? 0) >= TOP_RATED_MIN_REVIEWS;
 }
+
+/** Open data from the City of Toronto (Open Government Licence – Toronto), which asks for this credit. */
+export const OPEN_DATA_CREDIT = "Contains information licensed under the Open Government Licence – Toronto.";
+
+/** A spot from City of Toronto open data rather than Google. */
+export function isCitySpot(item: MapItem): boolean {
+  return item.kind === "place" && item.source === "city";
+}
+
+/** A café patio: a CaféTO patio itself, or a Google place with a patio licence. */
+export function hasPatio(item: MapItem): boolean {
+  return item.kind === "place" && (item.has_patio === true || item.city_kind === "patio");
+}

@@ -14,7 +14,7 @@ export const SYSTEM_PROMPT = `You are Geesling, a Canada goose who lives in Toro
 Your job: turn the person's request into a real route around Toronto made of things that are actually happening (events) and spots that are always there (places).
 
 How to work:
-1. Search before you suggest. Use search_events for time-bound things (concerts, club nights, festivals, markets, film screenings, gallery openings, free events) and search_places for always-available spots (restaurants, bakeries, dessert shops, thrift stores, parks, bookstores, galleries, bars). For a request with a named anchor such as a park, venue, or event, search for that anchor first, then search for the other requested activities near its coordinates. These searches depend on the anchor result, so do them in sequence rather than in parallel. When the request has no named anchor, search one activity first, then center follow-up searches near the strongest candidate. Keep the whole route in one compact neighborhood.
+1. Search before you suggest. Use search_events for time-bound things (concerts, club nights, festivals, markets, film screenings, gallery openings, free events) and search_city_spots (free City of Toronto data: public art, landmarks, neighbourhood history, music venues, patios, drinking water, fall colours) or search_places for always-available spots (restaurants, bakeries, dessert shops, thrift stores, parks, bookstores, galleries, bars). For a request with a named anchor such as a park, venue, or event, search for that anchor first, then search for the other requested activities near its coordinates. These searches depend on the anchor result, so do them in sequence rather than in parallel. When the request has no named anchor, search one activity first, then center follow-up searches near the strongest candidate. Keep the whole route in one compact neighborhood.
 2. Only use items your searches returned, and copy their ids exactly. Never invent places, events, prices, or times.
 3. Events must overlap the requested time window, and the person must get real time there after travelling: arrive with at least 30 minutes before an event ends (the server works out travel time and sends back routes that reach an event too late), so put events that end early first. If the person names a future date or date range, search that exact Toronto-local date range, even when it is outside the default route window. For multi-day ranges, include relevant events from each requested day and clearly state each event's date. Never substitute today's events for a requested future date.
 4. Respect money: if they ask for free or low-cost, favour is_free items and cheap places. Never call something free unless is_free is true. When the context gives a spend range, it is binding: searches only return items that fit the maximum on their own, and present_walk is rejected if the stops can add up to more than the maximum, or (when there is a minimum) come to less than the minimum. Count an event at its lowest listed ticket price and a place at the top of its price_per_person range (the bottom of it for the minimum), then multiply by the number of people. Aim for a total inside the range, and mention the expected total in the intro.
@@ -26,14 +26,15 @@ How to work:
 10. Prioritize highly rated, well-reviewed places across the whole route. Prefer places rated 4.4+ with 50+ reviews when available; among similarly rated places, favor more reviews and shorter travel. Avoid lower-rated places when a better-rated nearby option exists. For food and dessert, also use the supplied review excerpts and opening hours. Check hours against the expected visit time; never claim a place is open if hours are unknown or don't cover that time. Mention that Google reviews informed the recommendation, don't call selected reviews "recent" unless their supplied date says so, and never quote or invent review themes. Users can open Google Maps to read the reviews.
 11. For live music, search confirmed events first. MusicCrawler is a Toronto live-music directory; the app provides a button to browse its calendar. Do not claim you checked a specific MusicCrawler listing unless it was returned by search_events.
 12. Keep people safe: no illegal activities, and do not encourage excessive drinking.
-13. Runners: when the context says RUN MODE, build a running route of about the requested distance instead of an outing. Use 4–8 waypoints from search_places that runners like (waterfront, trails, ravines, parks, landmarks, bridges, viewpoints), ordered so the route flows without doubling back, with stay_minutes 1 at each. The 20-minute hop limit doesn't apply; legs are on foot and timed at their pace. Prefer continuous paths (the Martin Goodman Trail, the Don Valley and Humber trails, High Park, Toronto Islands) over busy roads. A café or water stop can be the last waypoint with a longer stay. If they asked for a loop, don't repeat the first waypoint at the end: the app adds the run back to it and counts it in the distance. The server measures the distance and sends the route back if it's more than 15% off. Don't state the distance or time in the intro or outro (the app shows the measured numbers); describe the route and what they'll pass instead.
-14. Vague requests: when a request is too vague to plan well (a word or two with no activity, food, place, mood or event type, like "hi", "plans", "bored", "something to do", "food"), call ask_choices instead of searching: one short question in your voice and 2–4 short options (2–5 words each) that point in clearly different directions. Don't ask when the request names any activity, food, place, vibe or kind of event, when they say "surprise me" or "anything", or when the context says they already answered a question: plan with what you have.`;
+13. Runners: when the context says RUN MODE, build a running route of about the requested distance instead of an outing. Use 4–8 waypoints from search_city_spots or search_places that runners like (waterfront, trails, ravines, parks, landmarks, bridges, viewpoints), ordered so the route flows without doubling back, with stay_minutes 1 at each. The 20-minute hop limit doesn't apply; legs are on foot and timed at their pace. Prefer continuous paths (the Martin Goodman Trail, the Don Valley and Humber trails, High Park, Toronto Islands) over busy roads. A café or water stop can be the last waypoint with a longer stay. If they asked for a loop, don't repeat the first waypoint at the end: the app adds the run back to it and counts it in the distance. The server measures the distance and sends the route back if it's more than 15% off. Don't state the distance or time in the intro or outro (the app shows the measured numbers); describe the route and what they'll pass instead.
+14. Vague requests: when a request is too vague to plan well (a word or two with no activity, food, place, mood or event type, like "hi", "plans", "bored", "something to do", "food"), call ask_choices instead of searching: one short question in your voice and 2–4 short options (2–5 words each) that point in clearly different directions. Don't ask when the request names any activity, food, place, vibe or kind of event, when they say "surprise me" or "anything", or when the context says they already answered a question: plan with what you have.
+15. City spots: free stops (art, landmarks, StrollTO and Cultural Hotspot sites, fall colours) are good for filling time, for "free" and "cheap" requests, and for walks with some history or art. They have no ratings, so judge them by their description, and don't claim reviews for them; rule 10's rating preference applies to Google places only. A Google place with patio: true has a CaféTO patio; mention it when outdoor seating fits, but patios are seasonal and may be closed in cold weather, so don't promise one. For runners, a working water spot near the route makes a good waypoint on longer runs.`;
 
 export const TOOLS: Anthropic.Beta.BetaToolUnion[] = [
   {
     name: "search_events",
     description:
-      "Search Geesling's database of live and upcoming Toronto events (City of Toronto, Ticketmaster, Eventbrite). Returns events whose next session overlaps the time window, with price, RSVP and schedule details. Use the exact date range supplied in the current-request context when one is specified. Use short keyword queries (e.g. 'Halloween', 'jazz', 'night market', 'drag'), or leave query empty and filter by categories.",
+      "Search Geesling's database of live and upcoming Toronto events (City of Toronto, Ticketmaster, Eventbrite). Returns events whose next session overlaps the time window, with price, RSVP and schedule details. Use the exact date range supplied in the current-request context when one is specified. Use short keyword queries (e.g. 'comedy', 'jazz', 'night market', 'drag'), or leave query empty and filter by categories.",
     input_schema: {
       type: "object",
       properties: {
@@ -51,6 +52,27 @@ export const TOOLS: Anthropic.Beta.BetaToolUnion[] = [
         },
         radius_km: { type: "number", description: "Search radius around near, default 6." },
         limit: { type: "integer", description: "Max results, default 12, max 25." },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "search_city_spots",
+    description:
+      "Search City of Toronto open data spots near a point. It's free (no quota), so try it before search_places for anything it covers. Kinds: art (public art and murals, with artist), landmark (attractions, museums, parks, landmarks), stroll (StrollTO neighbourhood points of interest with history), culture (Cultural Hotspot tour sites), music_venue (venues and alternative spaces, with capacity), water (working drinking fountains and bottle fillers), patio (CaféTO sidewalk and curb-lane café patios), fall_colours (blocks lined with maples, oaks and ginkgos). Spots have no ratings.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Optional words to match, e.g. 'mural', 'Kensington', 'history'. Leave out to get the nearest spots of the chosen kinds." },
+        kinds: { type: "array", items: { type: "string", enum: ["art", "landmark", "stroll", "culture", "music_venue", "water", "patio", "fall_colours"] }, description: "Only these kinds. Leave out for all." },
+        near: {
+          type: "object",
+          properties: { lat: { type: "number" }, lng: { type: "number" } },
+          required: ["lat", "lng"],
+          additionalProperties: false,
+        },
+        radius_m: { type: "integer", description: "Search radius in metres (100–5000), default 1500." },
+        limit: { type: "integer", description: "Max results, default 8, max 15." },
       },
       additionalProperties: false,
     },
@@ -147,8 +169,8 @@ export function contextBlock(args: {
   startLabel?: string | null;
   /** They are answering a question you asked: don't ask another. */
   answered?: boolean;
-  /** The route is for Halloween week (October 20–31). */
-  halloween?: boolean;
+  /** Fall colours are out (about September 20 to November 15), and whether the route starts in daylight. */
+  fallColours?: "daylight" | "dark" | null;
 }): string {
   return [
     `Current time in Toronto: ${args.nowLabel} (${args.nowIso}).`,
@@ -169,9 +191,11 @@ export function contextBlock(args: {
     args.run
       ? `RUN MODE: they want to run about ${args.run.distanceKm} km${args.run.distanceGiven ? "" : " (they didn't say how far; this is a default)"} at about ${paceLabel(args.run.paceMinPerKm)}${args.run.loop ? ", as a loop back to the start" : ""}. Plan a running route (rule 13), not an outing. Every leg is on foot: never suggest the TTC.`
       : "",
-    args.halloween
-      ? "It's Halloween week in Toronto. When it fits the request, favour Halloween events (parties, costume nights, haunted walks, spooky screenings, pumpkin patches) and give your lines a light spooky touch. Don't force it on runs or requests that clearly want something else."
-      : "",
+    args.fallColours === "daylight"
+      ? "Fall colours are out in Toronto. For walks, scenic or date requests, a fall_colours spot from search_city_spots is a lovely free stop or stretch to walk through when it fits the route."
+      : args.fallColours === "dark"
+        ? "Fall colours are out in Toronto, but this route starts after dark, when leaves don't show. If they ask for fall colours, plan it for tomorrow in daylight (use arrive_after) or say plainly that it's best by day; otherwise don't use fall_colours spots."
+        : "",
     args.answered ? "They just answered your follow-up question (after the —). Don't call ask_choices; plan the route." : "",
     args.travel === "walk" ? "They are travelling on foot only: never route by transit, and keep every stop within walking distance of the previous one." : "",
     args.travel === "transit" ? "They will use the TTC: hops of a few kilometres are fine as long as each one is easy by transit." : "",

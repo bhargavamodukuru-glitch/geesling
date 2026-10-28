@@ -42,4 +42,5 @@ yarn-error.*
 
 # ingestion preview output
 ingest-preview.json
+city-spots-preview.json
 .env
