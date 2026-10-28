@@ -1,7 +1,9 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DockTutorial, TUTORIAL_STEPS } from "@/components/DockTutorial";
 import { Goose } from "@/components/Goose";
 import { HatchIntro } from "@/components/HatchIntro";
 import { ItemSheet } from "@/components/ItemSheet";
@@ -33,6 +35,9 @@ const MENU: { key: Tab; label: string; title: string; icon: string | null; tile:
 ];
 // Height of the menu, so sheets, cards and banners sit above it.
 const DOCK_HEIGHT = 76;
+const DOCK_MAX_WIDTH = 440;
+// Set once someone has finished or skipped the first-run tour of the menu.
+const TUTORIAL_KEY = "geesling.tutorial.done";
 
 export default function HomeScreen() {
   if (!isConfigured) return <SetupNotice />;
@@ -67,6 +72,14 @@ function Home() {
   const [nudge, setNudge] = useState<string | null>(null);
   // Geesling's line over the map once the intro ends: busy (events are on) or quiet (nothing is).
   const [greeting, setGreeting] = useState<"busy" | "quiet" | null>(null);
+  // First-run tour of the menu (step index), shown once after the intro, before Geesling's greeting.
+  const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+  const firstVisit = useRef<boolean | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem(TUTORIAL_KEY)
+      .then((done) => (firstVisit.current = done !== "true"))
+      .catch(() => (firstVisit.current = false));
+  }, []);
   // On first view the event pins pop up one at a time; after that they just show.
   const [popping, setPopping] = useState(true);
   const [popped, setPopped] = useState(0);
@@ -170,11 +183,17 @@ function Home() {
   const revealApp = useCallback(() => {
     shown.current = true;
     setEntered(true);
-    greet();
+    if (firstVisit.current) setTutorialStep(0);
+    else greet();
     // Location is asked for as the map appears, so the prompt doesn't cover the hatching.
     void locate();
   }, [greet, locate]);
   const finishIntro = useCallback(() => setIntro(false), []);
+  const endTutorial = useCallback(() => {
+    setTutorialStep(null);
+    void AsyncStorage.setItem(TUTORIAL_KEY, "true").catch(() => {});
+    greet();
+  }, [greet]);
   // The busy line goes away on its own; the quiet one waits until they act on it.
   useEffect(() => {
     if (greeting !== "busy") return;
@@ -201,6 +220,15 @@ function Home() {
   }, [walk]);
 
   const title = MENU.find((m) => m.key === tab)?.title ?? "";
+  // Where menu tile i sits on screen (the dock is centred, with a 3 px border and 6 px inner padding), for the tour.
+  const dockWidth = Math.min(width - 20, DOCK_MAX_WIDTH);
+  const tileWidth = (dockWidth - 18) / MENU.length;
+  const tileRect = (i: number) => ({
+    x: (width - dockWidth) / 2 + 9 + i * tileWidth,
+    y: height - Math.max(insets.bottom, 8) - (DOCK_HEIGHT - 8) + 3,
+    width: tileWidth,
+    height: DOCK_HEIGHT - 14,
+  });
   // Tapping the open section's icon again closes it, like switching back to the map.
   const openTab = (key: Tab) => {
     setExpanded(false);
@@ -359,6 +387,16 @@ function Home() {
         </View>
       </View>
 
+      {tutorialStep !== null ? (
+        <DockTutorial
+          step={tutorialStep}
+          target={tileRect(tutorialStep)}
+          screen={{ width, height }}
+          cardBottom={dockSpace}
+          onNext={() => (tutorialStep + 1 < TUTORIAL_STEPS.length ? setTutorialStep(tutorialStep + 1) : endTutorial())}
+          onSkip={endTutorial}
+        />
+      ) : null}
       {intro ? <HatchIntro onReveal={revealApp} onDone={finishIntro} /> : null}
       {teamBanner}
     </View>
@@ -394,7 +432,7 @@ const styles = StyleSheet.create({
   sheetTitle: { fontFamily: fonts.heading, fontSize: 15, color: colors.ink, letterSpacing: 1 },
   cardWrap: { position: "absolute", left: 10, right: 10, maxWidth: 520, alignSelf: "center", zIndex: 12 },
   dockWrap: { position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center", paddingHorizontal: 10, zIndex: 10 },
-  dock: { flexDirection: "row", justifyContent: "space-around", width: "100%", maxWidth: 440, height: DOCK_HEIGHT - 8, paddingHorizontal: 6, backgroundColor: colors.paper, borderWidth: 3, borderColor: colors.ink, borderRadius: 24 },
+  dock: { flexDirection: "row", justifyContent: "space-around", width: "100%", maxWidth: DOCK_MAX_WIDTH, height: DOCK_HEIGHT - 8, paddingHorizontal: 6, backgroundColor: colors.paper, borderWidth: 3, borderColor: colors.ink, borderRadius: 24 },
   dockItem: { flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
   tile: { width: 42, height: 42, borderRadius: 11, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },
   tileActive: { borderWidth: 3, borderColor: colors.ink, transform: [{ translateY: -3 }], ...Platform.select({ web: { boxShadow: `0px 3px 0px ${colors.shadow}` } as object, default: {} }) },

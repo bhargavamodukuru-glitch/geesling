@@ -2,18 +2,23 @@ import { createAudioPlayer, type AudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EGG, EGG_CRACKED, EGG_SPLIT, Pixels, SHELL_BOTTOM, SHELL_CAP } from "@/components/EggSprites";
 import { Goose } from "@/components/Goose";
+import { Panel, PixelButton } from "@/components/Pixel";
 import { TorontoPixelBackdrop } from "@/components/TorontoPixelBackdrop";
 import { isNight } from "@/lib/daylight";
 import { HALLOWEEN } from "@/lib/season";
-import { colors, fonts } from "@/lib/theme";
+import { colors, fonts, text } from "@/lib/theme";
 
-// Opening scene: an egg rolls in over the skyline, wiggles and cracks; Geesling hatches, steps out and flies up
-// above its egg (the same Geesling as everywhere else in the app); then the screen fades to black and back, video-game style, onto the map.
-// Tap anywhere to skip to the fade. With Reduce Motion on, Geesling is already hatched and hovering.
+// Opening scene: an egg rolls in over the skyline and wiggles until it's tapped. Each tap cracks it more, and the
+// third hatches Geesling (the same Geesling as everywhere else in the app), who steps out, flies up above its egg
+// and says hello; then the screen fades to black and back, video-game style, onto the map.
+// Skip goes straight to the fade. With Reduce Motion on, Geesling is already hatched and hovering.
 
 type Stage = "egg" | "cracked" | "split" | "hatched";
+
+const HELLO = "Hi, I’m Geesling! Your goose friend who knows all of Toronto’s hot goss.";
 
 const NATIVE_DRIVER = Platform.OS !== "web";
 // The egg sits on the grass, this far up from the bottom of the screen.
@@ -80,16 +85,22 @@ interface Props {
 
 export function HatchIntro({ onReveal, onDone }: Props) {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const px = width < 420 ? 7 : 9;
   const nightMode = isNight(new Date());
   const play = useSounds();
 
   const [stage, setStage] = useState<Stage>("egg");
+  // The egg can be tapped once it has rolled in.
+  const [ready, setReady] = useState(false);
   const [pose, setPose] = useState<"sit" | "walk" | "fly">("sit");
   const [capOff, setCapOff] = useState(false);
   // 0 = clear, FADE_STEPS = black. `revealed` once the app is showing behind the curtain.
   const [curtain, setCurtain] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  // Geesling's hello, typed out a letter at a time once it's flying.
+  const [talking, setTalking] = useState(false);
+  const [typed, setTyped] = useState(0);
 
   const [roll] = useState(() => new Animated.Value(0));
   const [wiggle] = useState(() => new Animated.Value(0));
@@ -161,18 +172,48 @@ export function HatchIntro({ onReveal, onDone }: Props) {
     later(FADE_STEPS * 70 + 300 + FADE_STEPS * 80 + 40, onDone);
   }, [onDone, onReveal]);
 
-  // The scene, step by step.
+  const wiggleOnce = useCallback((deg: number, ms: number) => {
+    Animated.sequence([
+      Animated.timing(wiggle, { toValue: -deg, duration: ms, useNativeDriver: NATIVE_DRIVER }),
+      Animated.timing(wiggle, { toValue: deg, duration: ms * 2, useNativeDriver: NATIVE_DRIVER }),
+      Animated.timing(wiggle, { toValue: -deg / 2, duration: ms, useNativeDriver: NATIVE_DRIVER }),
+      Animated.timing(wiggle, { toValue: 0, duration: ms, useNativeDriver: NATIVE_DRIVER }),
+    ]).start();
+  }, [wiggle]);
+
+  // Each tap cracks the egg a little more; the third hatches Geesling, and the rest of the scene plays on its own.
+  const tapEgg = () => {
+    if (!ready || fading.current) return;
+    if (stage === "egg" || stage === "cracked") {
+      wiggleOnce(stage === "egg" ? 12 : 16, stage === "egg" ? 60 : 45);
+      setStage(stage === "egg" ? "cracked" : "split");
+      play("crack");
+      buzz("crack");
+    } else if (stage === "split") {
+      hatch();
+      later(800, stepOut);
+      later(1700, flyUp);
+      later(2700, () => setTalking(true));
+    }
+  };
+
+  // Once the hello has typed out, give it a moment to be read, then fade to the map.
+  useEffect(() => {
+    if (!talking) return;
+    const timer = typed < HELLO.length ? setTimeout(() => setTyped((n) => n + 1), 30) : setTimeout(fadeOut, 2000);
+    return () => clearTimeout(timer);
+  }, [talking, typed, fadeOut]);
+
+  // While it waits to be tapped, the egg gives a little wiggle now and then.
+  useEffect(() => {
+    if (!ready || stage === "hatched") return;
+    const timer = setInterval(() => wiggleOnce(6, 80), 2200);
+    return () => clearInterval(timer);
+  }, [ready, stage, wiggleOnce]);
+
+  // The egg rolls in (or, with Reduce Motion, Geesling is already up).
   useEffect(() => {
     let cancelled = false;
-    const wiggleOnce = (deg: number, ms: number) => {
-      buzz("tap");
-      Animated.sequence([
-        Animated.timing(wiggle, { toValue: -deg, duration: ms, useNativeDriver: NATIVE_DRIVER }),
-        Animated.timing(wiggle, { toValue: deg, duration: ms * 2, useNativeDriver: NATIVE_DRIVER }),
-        Animated.timing(wiggle, { toValue: -deg / 2, duration: ms, useNativeDriver: NATIVE_DRIVER }),
-        Animated.timing(wiggle, { toValue: 0, duration: ms, useNativeDriver: NATIVE_DRIVER }),
-      ]).start();
-    };
     void AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
       if (cancelled) return;
       if (reduce) {
@@ -181,20 +222,16 @@ export function HatchIntro({ onReveal, onDone }: Props) {
         setPose("fly");
         setCapOff(true);
         gooseY.setValue(-12 * px);
-        later(1800, fadeOut);
+        setTyped(HELLO.length);
+        setTalking(true);
         return;
       }
       Animated.timing(roll, { toValue: 1, duration: 1300, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }).start();
-      later(1300, () => buzz("tap"));
-      later(1600, () => wiggleOnce(8, 70));
-      later(2050, () => { setStage("cracked"); play("crack"); buzz("crack"); });
-      later(2500, () => wiggleOnce(12, 60));
-      later(2950, () => { setStage("split"); play("crack"); buzz("crack"); });
-      later(3300, () => wiggleOnce(16, 45));
-      later(3700, () => hatch());
-      later(4500, stepOut);
-      later(5400, flyUp);
-      later(7300, fadeOut);
+      later(1300, () => {
+        buzz("tap");
+        setReady(true);
+        wiggleOnce(8, 70);
+      });
     });
     const pending = timers;
     return () => {
@@ -215,16 +252,25 @@ export function HatchIntro({ onReveal, onDone }: Props) {
   return (
     <View style={[StyleSheet.absoluteFill, styles.root]} pointerEvents={revealed ? "none" : "auto"}>
       {!revealed ? (
-        <Pressable
-          style={[StyleSheet.absoluteFill, styles.screen]}
-          onPress={fadeOut}
-          accessibilityRole="button"
-          accessibilityLabel="Geesling is hatching. Tap to skip."
-        >
+        <View style={[StyleSheet.absoluteFill, styles.screen]}>
           <TorontoPixelBackdrop nightMode={nightMode} />
           {HALLOWEEN ? <HalloweenDecor /> : null}
 
-          <View style={styles.stage} pointerEvents="none">
+          {talking ? (
+            // Just above Geesling hovering over its egg (8 shell rows, 12 up, 16 tall, plus room for the bob).
+            <View style={[styles.helloArea, { bottom: STAGE_BOTTOM + 38 * px }]} pointerEvents="none">
+              <Panel style={styles.hello} shadow={4}>
+                <Text style={styles.speaker} selectable={false}>GEESLING</Text>
+                <Text style={[text.body, styles.helloLine]} selectable={false} accessibilityLiveRegion="polite">
+                  {HELLO.slice(0, typed)}
+                  {/* Keeps the box its full size while the line types out. */}
+                  <Text style={styles.unseen}>{HELLO.slice(typed)}</Text>
+                </Text>
+              </Panel>
+            </View>
+          ) : null}
+
+          <View style={styles.stage} pointerEvents="box-none">
             {stage === "hatched" ? (
               <View style={{ width: eggWidth, height: 8 * px }}>
                 {/* Geesling sits 3 pixels down inside the bottom shell until it steps out. */}
@@ -254,9 +300,17 @@ export function HatchIntro({ onReveal, onDone }: Props) {
                 </Animated.View>
               </View>
             ) : (
-              <Animated.View style={{ transform: [{ translateX }, { rotate: spin }, { rotate: tilt }] }}>
-                <Pixels grid={egg} size={px} />
-              </Animated.View>
+              <Pressable
+                onPress={tapEgg}
+                disabled={!ready}
+                hitSlop={30}
+                accessibilityRole="button"
+                accessibilityLabel={stage === "split" ? "Geesling's egg is about to hatch. Tap it." : "Geesling's egg. Tap it to help it hatch."}
+              >
+                <Animated.View style={{ transform: [{ translateX }, { rotate: spin }, { rotate: tilt }] }}>
+                  <Pixels grid={egg} size={px} />
+                </Animated.View>
+              </Pressable>
             )}
             {stage === "hatched"
               ? BURST.map(([dx, dy], i) => (
@@ -279,10 +333,13 @@ export function HatchIntro({ onReveal, onDone }: Props) {
               : null}
           </View>
 
-          <Text style={[styles.tapHint, nightMode && styles.tapHintNight]} pointerEvents="none">
-            Tap to skip
-          </Text>
-        </Pressable>
+          {ready && stage !== "hatched" ? (
+            <Text style={[styles.tapHint, nightMode && styles.tapHintNight]} pointerEvents="none">
+              {stage === "split" ? "One more tap!" : "Tap the egg!"}
+            </Text>
+          ) : null}
+          <PixelButton label="Skip" small onPress={fadeOut} style={[styles.skip, { top: insets.top + 12 }]} accessibilityLabel="Skip the intro" />
+        </View>
       ) : null}
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.curtain, { opacity: curtain / FADE_STEPS }]} />
     </View>
@@ -298,7 +355,13 @@ const styles = StyleSheet.create({
   cap: { position: "absolute", zIndex: 3 },
   spark: { position: "absolute", bottom: 60, backgroundColor: colors.gold, borderWidth: 1, borderColor: colors.wood },
   curtain: { backgroundColor: "#000000" },
-  tapHint: { position: "absolute", bottom: 8, alignSelf: "center", fontFamily: fonts.body, fontSize: 16, color: colors.paper, textShadowColor: colors.shadow, textShadowRadius: 0, textShadowOffset: { width: 1, height: 1 } },
+  skip: { position: "absolute", right: 16 },
+  helloArea: { position: "absolute", left: 16, right: 16, alignItems: "center" },
+  hello: { width: "100%", maxWidth: 440, gap: 4, backgroundColor: colors.paper },
+  speaker: { fontFamily: fonts.heading, fontSize: 13, color: colors.accent, letterSpacing: 1 },
+  helloLine: { fontSize: 23, lineHeight: 25 },
+  unseen: { opacity: 0 },
+  tapHint: { position: "absolute", bottom: 6, alignSelf: "center", fontFamily: fonts.heading, fontSize: 17, color: colors.paper, textShadowColor: colors.shadow, textShadowRadius: 0, textShadowOffset: { width: 1, height: 1 } },
   tapHintNight: { color: "#E8D6A7" },
   decor: { position: "absolute" },
 });
