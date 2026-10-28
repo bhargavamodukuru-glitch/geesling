@@ -7,7 +7,6 @@ import { EGG, EGG_CRACKED, EGG_SPLIT, Pixels, SHELL_BOTTOM, SHELL_CAP } from "@/
 import { Goose } from "@/components/Goose";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { TorontoPixelBackdrop } from "@/components/TorontoPixelBackdrop";
-import { isNight } from "@/lib/daylight";
 import { HALLOWEEN } from "@/lib/season";
 import { colors, fonts, text } from "@/lib/theme";
 
@@ -77,17 +76,18 @@ function HalloweenDecor() {
 const BURST = [[-1, -1], [0, -1.3], [1, -1], [-1.3, 0], [1.3, 0], [-0.8, 0.6], [0.8, 0.6]];
 
 interface Props {
+  /** Night scene (moon and stars) to match night mode. */
+  nightMode: boolean;
   /** The screen is fully black: show the app underneath now. */
   onReveal: () => void;
   /** The fade back from black has finished. */
   onDone: () => void;
 }
 
-export function HatchIntro({ onReveal, onDone }: Props) {
+export function HatchIntro({ nightMode, onReveal, onDone }: Props) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const px = width < 420 ? 7 : 9;
-  const nightMode = isNight(new Date());
   const play = useSounds();
 
   const [stage, setStage] = useState<Stage>("egg");
@@ -139,22 +139,14 @@ export function HatchIntro({ onReveal, onDone }: Props) {
     ]).start();
   }, [capDrop, gooseX, gooseY, px]);
 
-  // Up and over the egg, then hovering there.
+  // Up and over the egg, then hovering there, wings flapping, in one spot.
   const flyUp = useCallback(() => {
     setPose("fly");
     buzz("tap");
     Animated.parallel([
       Animated.timing(gooseX, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: NATIVE_DRIVER }),
       Animated.timing(gooseY, { toValue: -12 * px, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }),
-    ]).start(({ finished }) => {
-      if (!finished) return;
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(gooseY, { toValue: -13.5 * px, duration: 380, easing: Easing.inOut(Easing.sin), useNativeDriver: NATIVE_DRIVER }),
-          Animated.timing(gooseY, { toValue: -12 * px, duration: 380, easing: Easing.inOut(Easing.sin), useNativeDriver: NATIVE_DRIVER }),
-        ]),
-      ).start();
-    });
+    ]).start();
   }, [gooseX, gooseY, px]);
 
   // To black in steps, show the app, then back from black in steps.
@@ -257,7 +249,7 @@ export function HatchIntro({ onReveal, onDone }: Props) {
           {HALLOWEEN ? <HalloweenDecor /> : null}
 
           {talking ? (
-            // Just above Geesling hovering over its egg (8 shell rows, 12 up, 16 tall, plus room for the bob).
+            // Just above Geesling hovering over its egg (8 shell rows, 12 up, 16 tall, plus a gap).
             <View style={[styles.helloArea, { bottom: STAGE_BOTTOM + 38 * px }]} pointerEvents="none">
               <Panel style={styles.hello} shadow={4}>
                 <Text style={styles.speaker} selectable={false}>GEESLING</Text>

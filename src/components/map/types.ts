@@ -11,6 +11,8 @@ export interface CityMapProps {
   onBoundsChange: (bounds: Bounds) => void;
   /** Space covered at the bottom (the menu), so the map's logo, legal link and controls stay above it. */
   bottomInset?: number;
+  /** Dark map colours (night mode). */
+  dark?: boolean;
 }
 
 export const TORONTO = { lat: 43.6532, lng: -79.3832 };

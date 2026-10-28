@@ -26,7 +26,7 @@ function regionToBounds(region: Region) {
   };
 }
 
-export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSelect, onBoundsChange, bottomInset = 0 }: CityMapProps) {
+export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSelect, onBoundsChange, bottomInset = 0, dark = false }: CityMapProps) {
   const mapRef = useRef<MapView>(null);
   const initialRegion = useMemo<Region>(
     () => ({ latitude: userLocation?.lat ?? TORONTO.lat, longitude: userLocation?.lng ?? TORONTO.lng, ...DEFAULT_DELTA }),
@@ -110,6 +110,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
       initialRegion={initialRegion}
       customMapStyle={Platform.OS === "android" ? STARDEW_MAP_STYLE : undefined}
       mapType={Platform.OS === "ios" ? "mutedStandard" : "standard"}
+      userInterfaceStyle={dark ? "dark" : "light"}
       showsUserLocation
       showsPointsOfInterests={false}
       showsCompass={false}

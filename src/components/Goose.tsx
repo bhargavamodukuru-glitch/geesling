@@ -69,7 +69,7 @@ function GooseSprite({ size = 4, walking = true, flapping = false, flip = false 
     <View
       accessibilityRole="image"
       accessibilityLabel="Geesling the goose"
-      style={{ width: 14 * size, height: rows.length * size, transform: [{ scaleX: flip ? -1 : 1 }, { translateY: walking && frame === 1 ? -size / 2 : 0 }, { scaleY: flapping && frame === 1 ? 0.96 : 1 }] }}
+      style={{ width: 14 * size, height: rows.length * size, transform: [{ scaleX: flip ? -1 : 1 }, { translateY: walking && frame === 1 ? -size / 2 : 0 }] }}
     >
       {rows.map((row, y) => (
         <View key={y} style={{ flexDirection: "row", height: size }}>

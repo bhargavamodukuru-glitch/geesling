@@ -1,6 +1,6 @@
 /// <reference types="google.maps" />
 // Web map: Google Maps JavaScript API via @vis.gl/react-google-maps.
-import { AdvancedMarker, APIProvider, ControlPosition, Map, Polyline, useMap } from "@vis.gl/react-google-maps";
+import { AdvancedMarker, APIProvider, ColorScheme, ControlPosition, Map, Polyline, useMap } from "@vis.gl/react-google-maps";
 import { useEffect, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Panel } from "@/components/Pixel";
@@ -85,7 +85,7 @@ function CameraController({ walk, userLocation, focusKey }: Pick<CityMapProps, "
   return null;
 }
 
-export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSelect, onBoundsChange }: CityMapProps) {
+export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSelect, onBoundsChange, dark = false }: CityMapProps) {
   const walkIds = useMemo(() => new globalThis.Map(walk?.stops.map((s) => [s.item.id, s.order]) ?? []), [walk]);
   const pins: MapItem[] = useMemo(() => {
     const stopItems = walk?.stops.map((s) => s.item) ?? [];
@@ -115,6 +115,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
         gestureHandling="greedy"
         restriction={PAN_RESTRICTION}
         minZoom={9}
+        colorScheme={dark ? ColorScheme.DARK : ColorScheme.LIGHT}
         disableDefaultUI
         zoomControl
         // Middle of the right edge: the bottom is taken by the menu.

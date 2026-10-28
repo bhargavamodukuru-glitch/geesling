@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { KeyboardAvoidingView, PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DockTutorial, TUTORIAL_STEPS } from "@/components/DockTutorial";
@@ -8,6 +8,7 @@ import { Goose } from "@/components/Goose";
 import { HatchIntro } from "@/components/HatchIntro";
 import { ItemSheet } from "@/components/ItemSheet";
 import { CityMap } from "@/components/map/CityMap";
+import { ClockChip } from "@/components/map/ClockChip";
 import { MapGreeting } from "@/components/map/MapGreeting";
 import { RouteKey } from "@/components/map/RouteKey";
 import { FeedbackPanel } from "@/components/panels/FeedbackPanel";
@@ -20,6 +21,7 @@ import { useLocation } from "@/hooks/useLocation";
 import { useSaved } from "@/hooks/useSaved";
 import { fetchEventsInBounds, joinTeam } from "@/lib/api";
 import { OUT_OF_AREA_MESSAGE, TORONTO_BOUNDS, isInToronto, isViewInToronto } from "@/lib/area";
+import { isNight } from "@/lib/daylight";
 import { isConfigured } from "@/lib/supabase";
 import { colors, fonts, pixelShadow } from "@/lib/theme";
 import type { Bounds, EventFilters, EventItem, MapItem, Walk } from "@/lib/types";
@@ -36,8 +38,15 @@ const MENU: { key: Tab; label: string; title: string; icon: string | null; tile:
 // Height of the menu, so sheets, cards and banners sit above it.
 const DOCK_HEIGHT = 76;
 const DOCK_MAX_WIDTH = 440;
+// The grab bar above the menu (drag it to resize the menu).
+const GRIP_HEIGHT = 16;
 // Set once someone has finished or skipped the first-run tour of the menu.
 const TUTORIAL_KEY = "geesling.tutorial.done";
+// Remembered choices: light or dark mode (unset follows sunset), and how big the menu is.
+const THEME_KEY = "geesling.theme";
+const DOCK_SCALE_KEY = "geesling.dock.scale";
+const DOCK_SCALES = { min: 0.75, max: 1.35 };
+const clampScale = (n: number) => Math.min(DOCK_SCALES.max, Math.max(DOCK_SCALES.min, n));
 
 export default function HomeScreen() {
   if (!isConfigured) return <SetupNotice />;
@@ -48,7 +57,53 @@ function Home() {
   const { width, height } = useWindowDimensions();
   const wide = width >= 900;
   const insets = useSafeAreaInsets();
-  const dockSpace = DOCK_HEIGHT + Math.max(insets.bottom, 8);
+
+  // Drag the handle on top of the menu to make it bigger or smaller; the size is remembered.
+  const [dockScale, setDockScale] = useState(1);
+  const dockScaleRef = useRef(1);
+  const dragStart = useRef(1);
+  const resizeDock = useCallback((next: number, save: boolean) => {
+    dockScaleRef.current = clampScale(next);
+    setDockScale(dockScaleRef.current);
+    if (save) void AsyncStorage.setItem(DOCK_SCALE_KEY, String(dockScaleRef.current)).catch(() => {});
+  }, []);
+  // PanResponder keeps these callbacks and only calls them while dragging, never during render.
+  // eslint-disable-next-line react-hooks/refs
+  const [dockHandle] = useState(() =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        dragStart.current = dockScaleRef.current;
+      },
+      onPanResponderMove: (_event, gesture) => resizeDock(dragStart.current - gesture.dy / 160, false),
+      onPanResponderRelease: () => resizeDock(dockScaleRef.current, true),
+      onPanResponderTerminationRequest: () => false,
+    }),
+  );
+  const dockSpace = DOCK_HEIGHT * dockScale + GRIP_HEIGHT + Math.max(insets.bottom, 8);
+
+  // Light or dark mode. Until they pick one it follows the real sunset in Toronto.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
+  useEffect(() => {
+    AsyncStorage.multiGet([THEME_KEY, DOCK_SCALE_KEY])
+      .then(([[, savedTheme], [, savedScale]]) => {
+        if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
+        if (savedScale && Number.isFinite(Number(savedScale))) resizeDock(Number(savedScale), false);
+      })
+      .catch(() => {});
+  }, [resizeDock]);
+  const dark = theme ? theme === "dark" : isNight(now);
+  const toggleTheme = () => {
+    const next = dark ? "light" : "dark";
+    setTheme(next);
+    void AsyncStorage.setItem(THEME_KEY, next).catch(() => {});
+  };
   const { location: deviceLocation, status: locationStatus, locate: locateDevice } = useLocation();
   // Geesling covers Toronto only: a location elsewhere is not used to center the map or to start walks.
   const location = useMemo(() => (deviceLocation && isInToronto(deviceLocation.lat, deviceLocation.lng) ? deviceLocation : null), [deviceLocation]);
@@ -225,9 +280,9 @@ function Home() {
   const tileWidth = (dockWidth - 18) / MENU.length;
   const tileRect = (i: number) => ({
     x: (width - dockWidth) / 2 + 9 + i * tileWidth,
-    y: height - Math.max(insets.bottom, 8) - (DOCK_HEIGHT - 8) + 3,
+    y: height - Math.max(insets.bottom, 8) - (DOCK_HEIGHT - 8) * dockScale + 3,
     width: tileWidth,
-    height: DOCK_HEIGHT - 14,
+    height: (DOCK_HEIGHT - 14) * dockScale,
   });
   // Tapping the open section's icon again closes it, like switching back to the map.
   const openTab = (key: Tab) => {
@@ -242,7 +297,7 @@ function Home() {
   ) : null;
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, dark && styles.screenDark]}>
       {/* Full screen. On the web the map stops at the menu, since Google's attribution must stay visible and can't move. */}
       <View style={[StyleSheet.absoluteFill, Platform.OS === "web" && { bottom: dockSpace - 4 }]}>
         <CityMap
@@ -256,11 +311,15 @@ function Home() {
           onSelect={(item) => selectItem(item)}
           onBoundsChange={onBoundsChange}
           bottomInset={dockSpace}
+          dark={dark}
         />
       </View>
 
       {/* Banners and Geesling's greeting, clear of the status bar and the menu. */}
       <View style={[styles.overlay, { top: insets.top, bottom: dockSpace }]} pointerEvents="box-none">
+        <ClockChip now={now} dark={dark} onToggle={toggleTheme} />
+        {/* Below the clock. */}
+        <View style={styles.banners} pointerEvents="box-none">
         {walk ? (
           <View style={styles.walkBanner}>
             <Text style={styles.walkBannerText} numberOfLines={1}>
@@ -291,6 +350,7 @@ function Home() {
             <PixelButton label="✕" small onPress={() => setLocationNoteHidden(true)} accessibilityLabel="Dismiss location message" />
           </View>
         ) : null}
+        </View>
       </View>
 
       {/* The open section, as a sheet over the map. Kept mounted so the chat survives switching sections. */}
@@ -358,7 +418,18 @@ function Home() {
       ) : null}
 
       <View style={[styles.dockWrap, { paddingBottom: Math.max(insets.bottom, 8) }]} pointerEvents="box-none">
-        <View style={[styles.dock, pixelShadow(3)]} accessibilityRole="tablist">
+        <View
+          {...dockHandle.panHandlers}
+          style={styles.dockHandle}
+          accessibilityRole="adjustable"
+          accessibilityLabel="Menu size"
+          accessibilityHint="Drag up or down to make the menu bigger or smaller"
+          accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+          onAccessibilityAction={(event) => resizeDock(dockScaleRef.current + (event.nativeEvent.actionName === "increment" ? 0.15 : -0.15), true)}
+        >
+          <View style={[styles.dockGrip, dark && styles.dockGripDark]} />
+        </View>
+        <View style={[styles.dock, dark && styles.dockDark, { height: (DOCK_HEIGHT - 8) * dockScale, borderRadius: 24 * dockScale }, pixelShadow(3)]} accessibilityRole="tablist">
           {MENU.map((item) => {
             const active = tab === item.key;
             return (
@@ -370,15 +441,15 @@ function Home() {
                 accessibilityState={{ selected: active }}
                 style={styles.dockItem}
               >
-                <View style={[styles.tile, { backgroundColor: item.tile }, active && styles.tileActive]}>
-                  {item.icon ? <Text style={styles.tileIcon}>{item.icon}</Text> : <Goose size={2.2} walking={false} />}
+                <View style={[styles.tile, { width: 42 * dockScale, height: 42 * dockScale, borderRadius: 11 * dockScale, backgroundColor: item.tile }, active && styles.tileActive]}>
+                  {item.icon ? <Text style={[styles.tileIcon, { fontSize: 22 * dockScale }]}>{item.icon}</Text> : <Goose size={2.2 * dockScale} walking={false} />}
                   {item.key === "saved" && saved.length > 0 ? (
                     <View style={styles.badge}>
                       <Text style={styles.badgeText}>{saved.length > 99 ? "99+" : saved.length}</Text>
                     </View>
                   ) : null}
                 </View>
-                <Text style={[styles.dockLabel, active && styles.dockLabelActive]} numberOfLines={1}>
+                <Text style={[styles.dockLabel, { fontSize: 11 * dockScale }, dark && styles.dockLabelDark, active && (dark ? styles.dockLabelActiveDark : styles.dockLabelActive)]} numberOfLines={1}>
                   {item.label}
                 </Text>
               </Pressable>
@@ -397,7 +468,7 @@ function Home() {
           onSkip={endTutorial}
         />
       ) : null}
-      {intro ? <HatchIntro onReveal={revealApp} onDone={finishIntro} /> : null}
+      {intro ? <HatchIntro nightMode={dark} onReveal={revealApp} onDone={finishIntro} /> : null}
       {teamBanner}
     </View>
   );
@@ -405,8 +476,10 @@ function Home() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.parchment, overflow: "hidden" },
+  screenDark: { backgroundColor: "#202B49" },
   teamNote: { position: "absolute", left: 12, right: 12, zIndex: 30, backgroundColor: colors.gold, borderWidth: 3, borderColor: colors.ink, padding: 8 },
   overlay: { position: "absolute", left: 0, right: 0, zIndex: 5 },
+  banners: { position: "absolute", top: 40, left: 0, right: 0, bottom: 0 },
   walkBanner: {
     position: "absolute",
     top: 10,
@@ -433,6 +506,13 @@ const styles = StyleSheet.create({
   cardWrap: { position: "absolute", left: 10, right: 10, maxWidth: 520, alignSelf: "center", zIndex: 12 },
   dockWrap: { position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center", paddingHorizontal: 10, zIndex: 10 },
   dock: { flexDirection: "row", justifyContent: "space-around", width: "100%", maxWidth: DOCK_MAX_WIDTH, height: DOCK_HEIGHT - 8, paddingHorizontal: 6, backgroundColor: colors.paper, borderWidth: 3, borderColor: colors.ink, borderRadius: 24 },
+  // A grab bar on top of the menu: drag it up or down to resize the menu.
+  dockHandle: { alignSelf: "center", height: GRIP_HEIGHT, justifyContent: "center", paddingHorizontal: 28, cursor: "ns-resize" as never },
+  dockGrip: { width: 46, height: 6, borderRadius: 3, backgroundColor: colors.ink, opacity: 0.55 },
+  dockGripDark: { backgroundColor: "#D8C59A", opacity: 0.8 },
+  dockDark: { backgroundColor: "#34435D", borderColor: "#D8C59A" },
+  dockLabelDark: { color: "#D8C59A" },
+  dockLabelActiveDark: { fontFamily: fonts.heading, color: "#FFF8E6" },
   dockItem: { flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
   tile: { width: 42, height: 42, borderRadius: 11, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },
   tileActive: { borderWidth: 3, borderColor: colors.ink, transform: [{ translateY: -3 }], ...Platform.select({ web: { boxShadow: `0px 3px 0px ${colors.shadow}` } as object, default: {} }) },
