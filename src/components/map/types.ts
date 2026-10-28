@@ -9,6 +9,8 @@ export interface CityMapProps {
   focusKey: number;
   onSelect: (item: MapItem | null) => void;
   onBoundsChange: (bounds: Bounds) => void;
+  /** Space covered at the bottom (the menu), so the map's logo, legal link and controls stay above it. */
+  bottomInset?: number;
 }
 
 export const TORONTO = { lat: 43.6532, lng: -79.3832 };

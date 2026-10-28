@@ -1,6 +1,6 @@
 /// <reference types="google.maps" />
 // Web map: Google Maps JavaScript API via @vis.gl/react-google-maps.
-import { AdvancedMarker, APIProvider, Map, Polyline, useMap } from "@vis.gl/react-google-maps";
+import { AdvancedMarker, APIProvider, ControlPosition, Map, Polyline, useMap } from "@vis.gl/react-google-maps";
 import { useEffect, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Panel } from "@/components/Pixel";
@@ -117,6 +117,8 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
         minZoom={9}
         disableDefaultUI
         zoomControl
+        // Middle of the right edge: the bottom is taken by the menu.
+        zoomControlOptions={{ position: ControlPosition.RIGHT_CENTER }}
         clickableIcons={false}
         onClick={() => onSelect(null)}
         // onCameraChanged only fires on movement; idle also fires once the map first renders.

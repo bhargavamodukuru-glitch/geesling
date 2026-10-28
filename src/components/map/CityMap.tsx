@@ -26,7 +26,7 @@ function regionToBounds(region: Region) {
   };
 }
 
-export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSelect, onBoundsChange }: CityMapProps) {
+export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSelect, onBoundsChange, bottomInset = 0 }: CityMapProps) {
   const mapRef = useRef<MapView>(null);
   const initialRegion = useMemo<Region>(
     () => ({ latitude: userLocation?.lat ?? TORONTO.lat, longitude: userLocation?.lng ?? TORONTO.lng, ...DEFAULT_DELTA }),
@@ -114,6 +114,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
       showsPointsOfInterests={false}
       showsCompass={false}
       toolbarEnabled={false}
+      mapPadding={{ top: 0, right: 0, bottom: bottomInset, left: 0 }}
       onRegionChangeComplete={handleRegionChange}
       onPress={(e) => {
         if (e.nativeEvent.action !== "marker-press") onSelect(null);

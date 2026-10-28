@@ -46,12 +46,14 @@ interface Props {
   onInitialPromptComplete: () => void;
   onWalk: (walk: Walk) => void;
   onSelectStop: (item: MapItem, why: string) => void;
+  /** Geesling's opening line when nothing is on right now; the text box is focused so they can answer. */
+  nudge?: string | null;
 }
 
 let counter = 0;
 const nextId = () => `m${Date.now()}-${counter++}`;
 
-export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPromptConsumed, onInitialPromptComplete, onWalk, onSelectStop }: Props) {
+export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPromptConsumed, onInitialPromptComplete, onWalk, onSelectStop, nudge = null }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [budget, setBudget] = useState<number | null>(null);
@@ -132,6 +134,12 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
   };
 
   useEffect(() => {
+    if (!nudge) return;
+    const timer = setTimeout(() => inputRef.current?.focus(), 350);
+    return () => clearTimeout(timer);
+  }, [nudge]);
+
+  useEffect(() => {
     if (!initialRequest) {
       lastInitialRequest.current = null;
       return;
@@ -177,7 +185,8 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
               <Panel style={styles.bubble} shadow={3}>
                 <Text style={styles.speaker}>GEESLING</Text>
                 <Text style={text.body}>
-                  {HALLOWEEN ? "Honk-o-ween! " : "Honk! "}Tell me your vibe and how much time you’ve got. I’ll waddle you around the city — real events happening now, plus spots that are always open.
+                  {HALLOWEEN ? "Honk-o-ween! " : "Honk! "}
+                  {nudge ?? "Tell me your vibe and how much time you’ve got. I’ll waddle you around the city — real events happening now, plus spots that are always open."}
                 </Text>
               </Panel>
             </View>
