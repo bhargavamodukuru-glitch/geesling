@@ -19,6 +19,8 @@ test("the model sees a short description and no empty extras; switched-off water
   const view = cityForModel(citySpotToPlace(row({ details: { artist: "A", year: null, species: [] } })), row({ details: { artist: "A", year: null, species: [] }, distance_m: 412.6 }));
   assert.deepEqual(view.details, { artist: "A" });
   assert.equal(view.distance_m, 413);
+  assert.equal(view.kind, "place", "present_walk takes event or place, so a city spot must read as a place");
+  assert.equal(view.type, "public art");
   assert.equal(usableCitySpot(row({ kind: "water", details: { working: false } })), false);
   assert.equal(usableCitySpot(row({ kind: "water", details: { working: true } })), true);
 });

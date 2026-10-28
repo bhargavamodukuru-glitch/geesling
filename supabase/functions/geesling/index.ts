@@ -558,6 +558,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
 
   try {
     for (let turn = 0; turn < maxTurns && !presented; turn++) {
+      const turnStarted = Date.now();
       const response = await client.beta.messages.create({
         model: MODEL,
         max_tokens: 4096,
@@ -575,6 +576,8 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
       }
 
       meter.tokens(response.model, response.usage);
+      const modelMs = Date.now() - turnStarted;
+      const tools = response.content.filter((b) => b.type === "tool_use").map((b) => (b as Anthropic.Beta.BetaToolUseBlock).name);
       const texts = response.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text").map((b) => b.text);
       if (texts.length) finalText = texts.join("\n").trim();
 
@@ -588,6 +591,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
       const toolUses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
       messages.push({ role: "assistant", content: response.content });
 
+      const toolsStarted = Date.now();
       const results = await Promise.all(
         toolUses.map(async (tool): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
           const input = (tool.input ?? {}) as Record<string, unknown>;
@@ -666,7 +670,9 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
               const walk = run && typeof given.intro === "string" && typeof given.outro === "string"
                 ? { ...given, intro: withoutStatedDistance(given.intro, "Honk! Lace up, here's your route."), outro: withoutStatedDistance(given.outro, "Honk, nice run!") }
                 : given;
-              const unknownIds = (walk.stops ?? []).filter((s) => !known.has(s.id) || known.get(s.id)!.kind !== s.kind).map((s) => s.id);
+              // Ids are unique across events and places, so a known id with the wrong kind is just corrected.
+              for (const s of walk.stops ?? []) if (known.has(s.id)) s.kind = known.get(s.id)!.kind;
+              const unknownIds = (walk.stops ?? []).filter((s) => !known.has(s.id)).map((s) => s.id);
               if (!Array.isArray(walk.stops) || walk.stops.length === 0) {
                 return { type: "tool_result", tool_use_id: tool.id, content: "A walk needs at least one stop.", is_error: true };
               }
@@ -791,6 +797,9 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
           }
         }),
       );
+      // Why a tool call was refused (a route sent back costs a whole extra turn), first words only.
+      const refused = results.filter((r) => r.is_error).map((r) => String(r.content).slice(0, 90));
+      console.info("guide turn", { turn, modelMs, toolsMs: Date.now() - toolsStarted, out: response.usage.output_tokens, tools, refused });
       if (asked && !presented) return json({ message: asked.question, walk: null, choices: asked.choices });
       if (!presented) {
         const turnsLeft = maxTurns - 1 - turn;

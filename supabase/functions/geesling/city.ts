@@ -70,7 +70,8 @@ export function cityForModel(p: PlaceItem, row: CitySpotRow) {
   return {
     id: p.id,
     name: p.name,
-    kind: row.kind,
+    // present_walk takes kind "event" or "place"; city spots are places, so the city kind goes in type.
+    kind: "place",
     type: p.primary_type,
     lat: Number(p.lat.toFixed(5)),
     lng: Number(p.lng.toFixed(5)),
