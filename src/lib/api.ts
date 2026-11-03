@@ -1,7 +1,6 @@
-import { FunctionsHttpError } from "@supabase/supabase-js";
 import { readChoices, type Choices } from "./choices";
 import { keepEvent, torontoDateRange, windowRange } from "./format";
-import { ensureSession, supabase } from "./supabase";
+import { ensureSession, supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
 import type { TravelChoice } from "./planner";
 import type { Bounds, ChatMessage, EventFilters, EventItem, MapItem, SavedItem, Walk } from "./types";
 
@@ -54,10 +53,23 @@ export interface GuideReply {
   choices?: Choices | null;
 }
 
-export async function askGeesling(input: GuideInput): Promise<GuideReply> {
+/**
+ * Asks the guide for a route. `onProgress` gets short steps ("Searching live events") while it plans: the guide
+ * streams them as NDJSON lines, then a final {status, body} line. Where the response can't be read as a stream
+ * (native fetch), the whole thing is read at the end and only the answer is used.
+ */
+export async function askGeesling(input: GuideInput, onProgress?: (step: string) => void): Promise<GuideReply> {
   await ensureSession();
-  const { data, error } = await supabase.functions.invoke<GuideReply>("geesling", {
-    body: {
+  const { data: session } = await supabase.auth.getSession();
+  const response = await fetch(`${supabaseUrl}/functions/v1/geesling`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${session.session?.access_token ?? supabaseAnonKey}`,
+      apikey: supabaseAnonKey,
+      "Content-Type": "application/json",
+      Accept: "application/x-ndjson",
+    },
+    body: JSON.stringify({
       prompt: input.prompt,
       history: input.history.filter((m) => !m.error).map((m) => ({ role: m.role, text: m.walk ? `${m.walk.title}: ${m.walk.stops.map((s) => (s.item.kind === "event" ? s.item.title : s.item.name)).join(", ")}` : m.text })),
       origin: input.origin,
@@ -68,19 +80,44 @@ export async function askGeesling(input: GuideInput): Promise<GuideReply> {
       budgetLimit: input.budgetLimit ?? null,
       partySize: input.partySize ?? 1,
       answered: input.answered === true,
-    },
+    }),
   });
-  if (error) {
-    // The function answers rate limits and upstream errors with a goose-voiced message.
-    if (error instanceof FunctionsHttpError) {
-      const response = error.context as Response;
-      const body = (await response.json().catch(() => null)) as (Partial<GuideReply> & { error?: string }) | null;
-      if (body?.message) return { message: body.message, walk: null };
-      throw new Error(body?.error ?? error.message);
+
+  let final: { status: number; body: Partial<GuideReply> & { error?: string } } | null = null;
+  const handleLine = (line: string) => {
+    if (!line.trim()) return;
+    const parsed = JSON.parse(line) as { progress?: string; status?: number; body?: Partial<GuideReply> & { error?: string } };
+    if (parsed.progress) onProgress?.(parsed.progress);
+    else if (parsed.status !== undefined) final = { status: parsed.status, body: parsed.body ?? {} };
+  };
+  if (!(response.headers.get("content-type") ?? "").includes("ndjson")) {
+    // An error before streaming started (e.g. sign-in), or a server that doesn't stream: one JSON body.
+    final = { status: response.status, body: await response.json().catch(() => ({ error: `HTTP ${response.status}` })) };
+  } else if (response.body && typeof response.body.getReader === "function") {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      lines.forEach(handleLine);
     }
-    throw new Error(error.message);
+    handleLine(buffer);
+  } else {
+    (await response.text()).split("\n").forEach(handleLine);
   }
-  if (!data) throw new Error("Geesling didn't answer");
+
+  const result = final as { status: number; body: Partial<GuideReply> & { error?: string } } | null;
+  if (!result) throw new Error("Geesling didn't answer");
+  if (result.status !== 200) {
+    // The guide answers rate limits and upstream errors with a goose-voiced message.
+    if (result.body.message) return { message: result.body.message, walk: null };
+    throw new Error(result.body.error ?? `HTTP ${result.status}`);
+  }
+  const data = result.body as GuideReply;
   return { ...data, choices: readChoices(data.choices) };
 }
 

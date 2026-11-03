@@ -310,19 +310,22 @@ function Home() {
     <View style={[styles.screen, dark && styles.screenDark]}>
       {/* Full screen. On the web the map stops at the menu, since Google's attribution must stay visible and can't move. */}
       <View style={[StyleSheet.absoluteFill, Platform.OS === "web" && { bottom: dockSpace - 4 }]}>
-        <CityMap
-          // While a walk is shown, only its stops are on the map. Pins appear once the intro is over.
-          items={walk || !entered ? [] : popping ? events.slice(0, popped) : events}
-          walk={walk}
-          selectedId={selected?.item.id ?? null}
-          userLocation={location}
-          // The first time the person's location is known once the map is open, the camera moves to their area.
-          focusKey={focusKey + (entered && location ? 1 : 0)}
-          onSelect={(item) => selectItem(item)}
-          onBoundsChange={onBoundsChange}
-          bottomInset={dockSpace}
-          dark={dark}
-        />
+        {/* The map (Google's script, tiles and drawing) waits until the intro is done, so the opening screen loads fast. */}
+        {entered ? (
+          <CityMap
+            // While a walk is shown, only its stops are on the map. Pins appear once the intro is over.
+            items={walk || !entered ? [] : popping ? events.slice(0, popped) : events}
+            walk={walk}
+            selectedId={selected?.item.id ?? null}
+            userLocation={location}
+            // The first time the person's location is known once the map is open, the camera moves to their area.
+            focusKey={focusKey + (entered && location ? 1 : 0)}
+            onSelect={(item) => selectItem(item)}
+            onBoundsChange={onBoundsChange}
+            bottomInset={dockSpace}
+            dark={dark}
+          />
+        ) : null}
       </View>
 
       {/* Banners and Geesling's greeting, clear of the status bar and the menu. */}

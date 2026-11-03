@@ -58,6 +58,8 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
   const [draft, setDraft] = useState("");
   const [budget, setBudget] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  // What Geesling is doing right now while it plans ("Searching live events"), streamed from the guide.
+  const [step, setStep] = useState<string | null>(null);
   const [adjusting, setAdjusting] = useState(false);
   // What the latest walk answers: the original request, every name shown so far, and how many retries were used.
   const [plan, setPlan] = useState<{ request: PlanRequest; shown: string[]; retries: number } | null>(null);
@@ -85,6 +87,7 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
       return;
     }
     setBusy(true);
+    setStep(null);
     try {
       const reply = await askGeesling({
         prompt: trimmed,
@@ -97,7 +100,7 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
         budgetLimit: request?.budgetLimit,
         partySize: request?.partySize,
         answered: request?.answered,
-      });
+      }, setStep);
       setMessages((m) => [...m, { id: nextId(), role: "assistant", text: reply.message, walk: reply.walk, musicCrawlerLink, choices: reply.choices }]);
       if (reply.walk) {
         const names = reply.walk.stops.map((s) => itemTitle(s.item));
@@ -112,6 +115,7 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
       setMessages((m) => [...m, { id: nextId(), role: "assistant", text: `Honk… something went wrong: ${(e as Error).message}`, error: true }]);
     } finally {
       setBusy(false);
+      setStep(null);
       if (initial) onInitialPromptComplete();
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
@@ -175,7 +179,7 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
         ref={listRef}
         data={messages}
         // Rows read `busy` and the retry count, so tell the list to re-render when they change.
-        extraData={`${busy}-${retriesLeft}-${lastWalkId}-${answering?.base ?? ""}`}
+        extraData={`${busy}-${step}-${retriesLeft}-${lastWalkId}-${answering?.base ?? ""}`}
         keyExtractor={(m) => m.id}
         contentContainerStyle={{ gap: 10, padding: 12 }}
         ListHeaderComponent={messages.length === 0 ? (
@@ -248,7 +252,7 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
           )
         }
         ListFooterComponent={
-          busy ? <View style={styles.thinking}><GeeslingLoader label="Waddling around the city…" /></View> : undefined
+          busy ? <View style={styles.thinking}><GeeslingLoader label={step ? `${step}…` : "Waddling around the city…"} /></View> : undefined
         }
       />
 

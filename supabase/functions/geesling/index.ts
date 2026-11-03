@@ -422,18 +422,51 @@ class Meter {
   }
 }
 
+async function recordUsage(meter: Meter) {
+  const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+  const { error } = await db.from("api_usage").insert(meter.rows());
+  if (error) console.error("usage metering failed", error.message);
+}
+
 Deno.serve(async (req) => {
   const meter = new Meter();
+  // A client that accepts NDJSON gets progress lines ({"progress": "..."}) while the guide works, then one final
+  // line ({"status": 200, "body": {...}}). Anyone else gets the usual single JSON response.
+  if (req.method === "POST" && req.headers.get("accept")?.includes("application/x-ndjson")) {
+    const encoder = new TextEncoder();
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = writable.getWriter();
+    const send = (line: unknown) => writer.write(encoder.encode(JSON.stringify(line) + "\n")).catch(() => {});
+    (async () => {
+      try {
+        const response = await handle(req, meter, (step) => void send({ progress: step }));
+        await send({ status: response.status, body: await response.json().catch(() => ({ error: "Bad response" })) });
+      } catch (error) {
+        console.error("guide failed", error);
+        await send({ status: 500, body: { error: (error as Error).message } });
+      } finally {
+        await writer.close().catch(() => {});
+        await recordUsage(meter);
+      }
+    })();
+    return new Response(readable, { headers: { ...corsHeaders, "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache" } });
+  }
   try {
     return await handle(req, meter);
   } finally {
-    const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-    const { error } = await db.from("api_usage").insert(meter.rows());
-    if (error) console.error("usage metering failed", error.message);
+    await recordUsage(meter);
   }
 });
 
-async function handle(req: Request, meter: Meter): Promise<Response> {
+/** Short, plain words for what the guide is doing, shown in the chat while it plans. */
+const TOOL_STEPS: Record<string, string> = {
+  search_events: "Searching live events",
+  search_places: "Looking up places nearby",
+  search_city_spots: "Checking public art, landmarks and city spots",
+  present_walk: "Timing the walk between stops",
+};
+
+async function handle(req: Request, meter: Meter, progress: (step: string) => void = () => {}): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -557,7 +590,9 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
   const maxTurns = longOuting ? LONG_MAX_TURNS : MAX_TURNS;
 
   try {
+    progress("Reading your request");
     for (let turn = 0; turn < maxTurns && !presented; turn++) {
+      if (turn > 0) progress("Choosing stops and writing your route");
       const turnStarted = Date.now();
       const response = await client.beta.messages.create({
         model: MODEL,
@@ -591,6 +626,7 @@ async function handle(req: Request, meter: Meter): Promise<Response> {
       const toolUses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
       messages.push({ role: "assistant", content: response.content });
 
+      for (const name of new Set(toolUses.map((t) => t.name))) if (TOOL_STEPS[name]) progress(TOOL_STEPS[name]);
       const toolsStarted = Date.now();
       const results = await Promise.all(
         toolUses.map(async (tool): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {

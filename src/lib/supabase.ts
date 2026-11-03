@@ -6,6 +6,9 @@ const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
 export const isConfigured = Boolean(url && anonKey);
+/** For calls made with plain fetch (the streamed guide). */
+export const supabaseUrl = url;
+export const supabaseAnonKey = anonKey;
 
 export const supabase: SupabaseClient = createClient(url || "https://not-configured.supabase.co", anonKey || "not-configured", {
   auth: {
