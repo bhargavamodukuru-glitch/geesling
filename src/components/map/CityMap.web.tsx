@@ -5,7 +5,7 @@ import { useEffect, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Panel } from "@/components/Pixel";
 import { Goose } from "@/components/Goose";
-import { MapPin } from "@/components/MapPin";
+import { MapPin, pinAccessibilityLabel } from "@/components/MapPin";
 import { logMapLoad } from "@/lib/api";
 import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
@@ -167,7 +167,8 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
             position={{ lat: item.lat, lng: item.lng }}
             zIndex={walkIds.has(item.id) ? 1000 : selectedId === item.id ? 999 : 1}
             onClick={() => onSelect(item)}
-            title={item.kind === "event" ? item.title : item.name}
+            // Google uses the title as the pin's name for screen readers and keyboard users.
+            title={pinAccessibilityLabel(item, walkIds.get(item.id))}
           >
             <MapPin item={item} order={walkIds.get(item.id)} selected={selectedId === item.id} />
           </AdvancedMarker>

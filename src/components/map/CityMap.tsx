@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polygon, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from "react-native-maps";
-import { MapPin } from "@/components/MapPin";
+import { MapPin, pinAccessibilityLabel } from "@/components/MapPin";
 import { OUTSIDE_MASK_OUTER, PAN_BOUNDS, TORONTO_RING, clampToPanArea } from "@/lib/area";
 import { decodePolyline } from "@/lib/polyline";
 import { PHOTO_SPOTS } from "@/lib/photoSpots";
@@ -144,6 +144,9 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
           anchor={{ x: 0.5, y: 1 }}
           tracksViewChanges={tracking || selectedId === item.id}
           zIndex={walkIds.has(item.id) ? 1000 : selectedId === item.id ? 999 : 1}
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel={pinAccessibilityLabel(item, walkIds.get(item.id))}
           onPress={(e) => {
             e.stopPropagation();
             onSelect(item);

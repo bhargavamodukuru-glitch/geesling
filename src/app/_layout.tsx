@@ -11,8 +11,19 @@ import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { ensureSession, isConfigured } from "@/lib/supabase";
 import { colors } from "@/lib/theme";
 
+// Web: a thick dark focus ring with a gold halo, so keyboard focus shows on every colour in the app (WCAG 2.4.7).
+const FOCUS_CSS = `:focus-visible { outline: 3px solid ${colors.ink} !important; outline-offset: 2px; box-shadow: 0 0 0 6px ${colors.gold} !important; }`;
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ PixelifySans_400Regular, PixelifySans_700Bold, VT323_400Regular });
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    const style = document.createElement("style");
+    style.textContent = FOCUS_CSS;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
 
   useEffect(() => {
     if (isConfigured) ensureSession().catch((e) => console.warn("Anonymous sign-in failed:", (e as Error).message));

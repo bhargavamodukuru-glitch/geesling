@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import { View } from "react-native";
+import { AccessibilityInfo, View } from "react-native";
 import { HALLOWEEN } from "@/lib/season";
 
 // 14×16 pixel Canada goose in a red Toronto toque (a witch hat in Halloween week), facing right. Two walking frames.
@@ -49,13 +49,29 @@ interface Props {
   flip?: boolean;
 }
 
+// Moving things stop within 5 seconds (WCAG 2.2.2), and don't move at all with Reduce Motion on.
+const MAX_ANIMATION_MS = 5000;
+
 function GooseSprite({ size = 4, walking = true, flapping = false, flip = false }: Props) {
   const [frame, setFrame] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
-    if (!walking && !flapping) return;
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => sub.remove();
+  }, []);
+  useEffect(() => {
+    if ((!walking && !flapping) || reduceMotion) return;
     const id = setInterval(() => setFrame((f) => (f + 1) % 2), flapping ? 170 : 280);
-    return () => clearInterval(id);
-  }, [walking, flapping]);
+    const stop = setTimeout(() => {
+      clearInterval(id);
+      setFrame(0);
+    }, MAX_ANIMATION_MS);
+    return () => {
+      clearInterval(id);
+      clearTimeout(stop);
+    };
+  }, [walking, flapping, reduceMotion]);
 
   const body = flapping ? SPRITE.map((row, y) => {
     // Pixel wings lift and lower around Geesling's body in alternating frames.

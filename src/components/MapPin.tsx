@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { pinLabel } from "@/lib/format";
 import { isTopRated } from "@/lib/placeBadges";
 import { CATEGORY_LABELS, colors, fonts } from "@/lib/theme";
-import type { MapItem } from "@/lib/types";
+import { itemTitle, type MapItem } from "@/lib/types";
 
 interface Props {
   item: MapItem;
@@ -24,6 +24,14 @@ function placeEmoji(types: string[]): string {
   return "📍";
 }
 
+/** What a screen reader says for a pin: name, when, free or paid, and top rated. */
+export function pinAccessibilityLabel(item: MapItem, order?: number): string {
+  const when = item.kind === "event" ? (item.is_live ? "happening now" : pinLabel(item)) : null;
+  return [order !== undefined ? `Stop ${order}` : null, itemTitle(item), when, item.is_free ? "free" : "paid", isTopRated(item) ? "top rated" : null]
+    .filter(Boolean)
+    .join(", ");
+}
+
 function PinView({ item, order, selected }: Props) {
   const free = item.is_free;
   const isPhotoSpot = item.kind === "place" && item.types.includes("photography_spot");
@@ -33,6 +41,8 @@ function PinView({ item, order, selected }: Props) {
   const label = item.kind === "event" ? pinLabel(item) : null;
   const live = item.kind === "event" && item.is_live;
   const topRated = isTopRated(item);
+  // Paid pins carry a "$" so free and paid aren't told apart by colour alone (WCAG 1.4.1).
+  const paid = !free && !isPhotoSpot;
 
   return (
     <View style={styles.wrap} pointerEvents="none">
@@ -44,7 +54,13 @@ function PinView({ item, order, selected }: Props) {
         <View style={styles.labelSpacer} />
       )}
       <View style={styles.row}>
-        <View style={styles.sideSpacer} />
+        <View style={styles.sideSpacer}>
+          {paid ? (
+            <View style={styles.paidBadge}>
+              <Text style={styles.paidText}>$</Text>
+            </View>
+          ) : null}
+        </View>
         <View style={[styles.pin, { backgroundColor: bg, borderColor: border, transform: [{ scale: selected ? 1.15 : 1 }] }]}>
           <Text style={order !== undefined ? styles.orderText : styles.icon}>{icon}</Text>
           {topRated ? (
@@ -71,7 +87,9 @@ const styles = StyleSheet.create({
   labelSpacer: { height: 18 },
   labelText: { fontFamily: fonts.body, fontSize: 18, lineHeight: 18 },
   row: { flexDirection: "row", alignItems: "center" },
-  sideSpacer: { width: 22 },
+  sideSpacer: { width: 22, alignItems: "flex-end" },
+  paidBadge: { width: 16, height: 16, marginRight: 2, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },
+  paidText: { fontFamily: fonts.heading, fontSize: 10, lineHeight: 12, color: colors.ink },
   side: { width: 22, alignItems: "flex-start" },
   cheers: { fontSize: 15, marginLeft: 2 },
   pin: { width: 30, height: 30, borderWidth: 3, alignItems: "center", justifyContent: "center", overflow: "visible" },

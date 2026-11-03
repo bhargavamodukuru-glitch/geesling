@@ -48,7 +48,7 @@ export function ItemSheet({ item, note, onClose, maxHeight }: Props) {
             {hasPatio(item) ? <Tag label="☕ Patio" color={colors.parchmentDark} textColor={colors.ink} /> : null}
             {item.kind === "event" && item.age_min ? <Tag label={`${item.age_min}+`} color={colors.ink} /> : null}
           </View>
-          <Text style={text.h2} numberOfLines={3}>
+          <Text style={text.h2} numberOfLines={3} accessibilityRole="header">
             {title}
           </Text>
         </View>

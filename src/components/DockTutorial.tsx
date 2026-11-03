@@ -76,7 +76,7 @@ export function DockTutorial({ step, target, screen, cardBottom, onNext, onSkip 
               {step + 1} of {TUTORIAL_STEPS.length}
             </Text>
           </View>
-          <Text style={styles.title}>{current.title}</Text>
+          <Text style={styles.title} accessibilityRole="header">{current.title}</Text>
           <Text style={text.body} accessibilityLiveRegion="polite">{current.body}</Text>
           <View style={styles.buttons}>
             {!last ? <PixelButton label="Skip" small onPress={onSkip} accessibilityLabel="Skip the tour" /> : <View />}

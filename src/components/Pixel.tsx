@@ -31,7 +31,8 @@ interface ButtonProps {
 const TONES: Record<NonNullable<ButtonProps["tone"]>, { bg: string; fg: string }> = {
   paper: { bg: colors.paper, fg: colors.ink },
   gold: { bg: colors.gold, fg: colors.ink },
-  green: { bg: colors.free, fg: colors.white },
+  // The darker green, so white text on it meets 4.5:1 contrast.
+  green: { bg: colors.freeDark, fg: colors.white },
   purple: { bg: colors.paid, fg: colors.white },
   red: { bg: colors.accent, fg: colors.white },
   wood: { bg: colors.wood, fg: colors.paper },

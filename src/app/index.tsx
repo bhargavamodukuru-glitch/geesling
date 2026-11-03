@@ -46,6 +46,8 @@ const TUTORIAL_KEY = "geesling.tutorial.done";
 const THEME_KEY = "geesling.theme";
 const DOCK_SCALE_KEY = "geesling.dock.scale";
 const DOCK_SCALES = { min: 0.75, max: 1.35 };
+// Tapping the grip steps through these sizes, so dragging isn't the only way to resize (WCAG 2.5.7).
+const DOCK_STEPS = [0.75, 1, 1.35];
 const clampScale = (n: number) => Math.min(DOCK_SCALES.max, Math.max(DOCK_SCALES.min, n));
 
 export default function HomeScreen() {
@@ -67,12 +69,17 @@ function Home() {
     setDockScale(dockScaleRef.current);
     if (save) void AsyncStorage.setItem(DOCK_SCALE_KEY, String(dockScaleRef.current)).catch(() => {});
   }, []);
+  const stepDock = () => {
+    const next = DOCK_STEPS.find((step) => step > dockScaleRef.current + 0.01) ?? DOCK_STEPS[0];
+    resizeDock(next, true);
+  };
   // PanResponder keeps these callbacks and only calls them while dragging, never during render.
+  // A tap goes to the grip's onPress instead; the drag takes over once the finger moves.
   // eslint-disable-next-line react-hooks/refs
   const [dockHandle] = useState(() =>
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 4,
       onPanResponderGrant: () => {
         dragStart.current = dockScaleRef.current;
       },
@@ -153,11 +160,6 @@ function Home() {
       .then((ok) => setTeamNote(ok ? "This device is marked as team. Its requests show in yellow in the usage sheet." : "That team link didn't work."))
       .catch(() => setTeamNote("Couldn't check the team link. Try again later."));
   }, [team]);
-  useEffect(() => {
-    if (!teamNote) return;
-    const timer = setTimeout(() => setTeamNote(null), 6000);
-    return () => clearTimeout(timer);
-  }, [teamNote]);
   // The open section, or null for just the map.
   const [tab, setTab] = useState<Tab | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -249,12 +251,6 @@ function Home() {
     void AsyncStorage.setItem(TUTORIAL_KEY, "true").catch(() => {});
     greet();
   }, [greet]);
-  // The busy line goes away on its own; the quiet one waits until they act on it.
-  useEffect(() => {
-    if (greeting !== "busy") return;
-    const timer = setTimeout(() => setGreeting(null), 9000);
-    return () => clearTimeout(timer);
-  }, [greeting]);
   // Pins pop up one by one, taking about two and a half seconds however many there are.
   useEffect(() => {
     if (!entered || !popping || loadedKey === null) return;
@@ -290,10 +286,11 @@ function Home() {
     setTab((current) => (current === key ? null : key));
   };
 
+  // Stays until tapped, so there's time to read it.
   const teamBanner = teamNote ? (
-    <View style={[styles.teamNote, { top: insets.top + 12 }]} pointerEvents="none">
-      <Text style={styles.noteText}>{teamNote}</Text>
-    </View>
+    <Pressable style={[styles.teamNote, { top: insets.top + 12 }]} onPress={() => setTeamNote(null)} accessibilityRole="button" accessibilityHint="Tap to close">
+      <Text style={styles.noteText} accessibilityLiveRegion="polite">{teamNote} (Tap to close.)</Text>
+    </Pressable>
   ) : null;
 
   return (
@@ -376,7 +373,7 @@ function Home() {
               </Pressable>
             ) : null}
             <View style={styles.sheetTitleRow}>
-              <Text style={styles.sheetTitle}>{title.toUpperCase()}</Text>
+              <Text style={styles.sheetTitle} accessibilityRole="header">{title.toUpperCase()}</Text>
               <PixelButton label="✕" small onPress={() => setTab(null)} accessibilityLabel={`Close ${title}`} />
             </View>
           </View>
@@ -418,16 +415,19 @@ function Home() {
       ) : null}
 
       <View style={[styles.dockWrap, { paddingBottom: Math.max(insets.bottom, 8) }]} pointerEvents="box-none">
-        <View
-          {...dockHandle.panHandlers}
-          style={styles.dockHandle}
-          accessibilityRole="adjustable"
-          accessibilityLabel="Menu size"
-          accessibilityHint="Drag up or down to make the menu bigger or smaller"
-          accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
-          onAccessibilityAction={(event) => resizeDock(dockScaleRef.current + (event.nativeEvent.actionName === "increment" ? 0.15 : -0.15), true)}
-        >
-          <View style={[styles.dockGrip, dark && styles.dockGripDark]} />
+        <View {...dockHandle.panHandlers}>
+          <Pressable
+            onPress={stepDock}
+            style={styles.dockHandle}
+            accessibilityRole="adjustable"
+            accessibilityLabel="Menu size"
+            accessibilityValue={{ text: dockScale < 0.9 ? "small" : dockScale > 1.2 ? "large" : "medium" }}
+            accessibilityHint="Tap to change the menu size, or drag up or down"
+            accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+            onAccessibilityAction={(event) => resizeDock(dockScaleRef.current + (event.nativeEvent.actionName === "increment" ? 0.15 : -0.15), true)}
+          >
+            <View style={[styles.dockGrip, dark && styles.dockGripDark]} />
+          </Pressable>
         </View>
         <View style={[styles.dock, dark && styles.dockDark, { height: (DOCK_HEIGHT - 8) * dockScale, borderRadius: 24 * dockScale }, pixelShadow(3)]} accessibilityRole="tablist">
           {MENU.map((item) => {
@@ -508,8 +508,8 @@ const styles = StyleSheet.create({
   dock: { flexDirection: "row", justifyContent: "space-around", width: "100%", maxWidth: DOCK_MAX_WIDTH, height: DOCK_HEIGHT - 8, paddingHorizontal: 6, backgroundColor: colors.paper, borderWidth: 3, borderColor: colors.ink, borderRadius: 24 },
   // A grab bar on top of the menu: drag it up or down to resize the menu.
   dockHandle: { alignSelf: "center", height: GRIP_HEIGHT, justifyContent: "center", paddingHorizontal: 28, cursor: "ns-resize" as never },
-  dockGrip: { width: 46, height: 6, borderRadius: 3, backgroundColor: colors.ink, opacity: 0.55 },
-  dockGripDark: { backgroundColor: "#D8C59A", opacity: 0.8 },
+  dockGrip: { width: 46, height: 6, borderRadius: 3, backgroundColor: colors.ink },
+  dockGripDark: { backgroundColor: "#FFF8E6" },
   dockDark: { backgroundColor: "#34435D", borderColor: "#D8C59A" },
   dockLabelDark: { color: "#D8C59A" },
   dockLabelActiveDark: { fontFamily: fonts.heading, color: "#FFF8E6" },

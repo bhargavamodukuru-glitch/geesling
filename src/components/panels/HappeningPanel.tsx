@@ -66,7 +66,7 @@ export function HappeningPanel({ events, loading, error, filters, onFilters, onS
                 accessibilityLabel={selectedLabel}
               />
               <PixelButton label="↻" small onPress={onRefresh} accessibilityLabel="Refresh events" />
-              <Text style={[text.small, styles.resultCount]}>{loading ? "Scouting…" : `${events.length} events`}</Text>
+              <Text style={[text.small, styles.resultCount]} accessibilityLiveRegion="polite">{loading ? "Scouting…" : `${events.length} events`}</Text>
             </View>
             {calendarOpen ? (
               <View style={styles.calendar}>

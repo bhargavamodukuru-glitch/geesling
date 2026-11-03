@@ -196,11 +196,11 @@ export function HatchIntro({ nightMode, onReveal, onDone }: Props) {
     return () => clearTimeout(timer);
   }, [talking, typed, fadeOut]);
 
-  // While it waits to be tapped, the egg gives a little wiggle now and then.
+  // While it waits to be tapped, the egg gives a couple of little wiggles, then sits still (motion stops within 5 s).
   useEffect(() => {
     if (!ready || stage === "hatched") return;
-    const timer = setInterval(() => wiggleOnce(6, 80), 2200);
-    return () => clearInterval(timer);
+    const timers = [1800, 3800].map((ms) => setTimeout(() => wiggleOnce(6, 80), ms));
+    return () => timers.forEach(clearTimeout);
   }, [ready, stage, wiggleOnce]);
 
   // The egg rolls in (or, with Reduce Motion, Geesling is already up).
@@ -353,7 +353,8 @@ const styles = StyleSheet.create({
   speaker: { fontFamily: fonts.heading, fontSize: 13, color: colors.accent, letterSpacing: 1 },
   helloLine: { fontSize: 23, lineHeight: 25 },
   unseen: { opacity: 0 },
-  tapHint: { position: "absolute", bottom: 6, alignSelf: "center", fontFamily: fonts.heading, fontSize: 17, color: colors.paper, textShadowColor: colors.shadow, textShadowRadius: 0, textShadowOffset: { width: 1, height: 1 } },
-  tapHintNight: { color: "#E8D6A7" },
+  // Dark text on a paper chip, readable over any part of the scene.
+  tapHint: { position: "absolute", bottom: 4, alignSelf: "center", fontFamily: fonts.heading, fontSize: 17, color: colors.ink, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 8, paddingVertical: 2, overflow: "hidden" },
+  tapHintNight: { color: "#FFF8E6", backgroundColor: "#34435D", borderColor: "#D8C59A" },
   decor: { position: "absolute" },
 });

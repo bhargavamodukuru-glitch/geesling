@@ -19,14 +19,14 @@ const everyday = {
   sky: "#8FD3F4",
   water: "#6FB7D9",
   grass: "#9BCB6B",
-  live: "#E8483A",
+  live: "#C8412F", // white text on it meets 4.5:1
   white: "#FFFFFF",
   shadow: "#2A1A0C",
 };
 
 // Halloween week (src/lib/season.ts): pumpkin orange and witchy purple in place of red and brown.
 const halloween: Partial<typeof everyday> = {
-  accent: "#D9561A",
+  accent: "#B5480F", // darker than pumpkin so white text on it meets 4.5:1
   gold: "#F5A524",
   wood: "#5B2E7A",
   woodDark: "#3A1B52",

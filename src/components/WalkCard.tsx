@@ -29,7 +29,7 @@ export function WalkCard({ walk: saved, onShowOnMap, onSelectStop }: Props) {
 
   return (
     <Panel tone="parchment" style={styles.card}>
-      <Text style={styles.title}>{walk.title}</Text>
+      <Text style={styles.title} accessibilityRole="header">{walk.title}</Text>
       <View style={styles.summary} accessibilityLabel="Plan summary">
         <Text style={styles.summaryTitle}>
           ⏱️ {formatDuration(summary.totalMinutes)} total · {summary.stops} stop{summary.stops === 1 ? "" : "s"}
