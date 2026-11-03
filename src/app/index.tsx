@@ -22,6 +22,7 @@ import { useSaved } from "@/hooks/useSaved";
 import { fetchEventsInBounds, joinTeam } from "@/lib/api";
 import { OUT_OF_AREA_MESSAGE, TORONTO_BOUNDS, isInToronto, isViewInToronto } from "@/lib/area";
 import { isNight } from "@/lib/daylight";
+import type { PlanRequest } from "@/lib/planner";
 import { isConfigured } from "@/lib/supabase";
 import { colors, fonts, pixelShadow } from "@/lib/theme";
 import type { Bounds, EventFilters, EventItem, MapItem, Walk } from "@/lib/types";
@@ -132,6 +133,9 @@ function Home() {
   const [entered, setEntered] = useState(false);
   const [intro, setIntro] = useState(true);
   const [nudge, setNudge] = useState<string | null>(null);
+  // A question typed on the opening screen, sent to the chat once the map shows.
+  const [pendingRequest, setPendingRequest] = useState<PlanRequest | null>(null);
+  const asked = useRef(false);
   // Geesling's line over the map once the intro ends: busy (events are on) or quiet (nothing is).
   const [greeting, setGreeting] = useState<"busy" | "quiet" | null>(null);
   // First-run tour of the menu (step index), shown once after the intro, before Geesling's greeting.
@@ -216,7 +220,8 @@ function Home() {
   const shown = useRef(false);
   const greeted = useRef(false);
   const greet = useCallback(() => {
-    if (greeted.current || !shown.current || liveNow.current === null) return;
+    // Someone who asked a question on the opening screen goes straight to the answer: no greeting.
+    if (asked.current || greeted.current || !shown.current || liveNow.current === null) return;
     greeted.current = true;
     if (liveNow.current > 0) {
       setGreeting("busy");
@@ -240,12 +245,20 @@ function Home() {
   const revealApp = useCallback(() => {
     shown.current = true;
     setEntered(true);
+    // The tour waits for a visit where they didn't jump straight into a question.
+    if (asked.current) return;
     if (firstVisit.current) setTutorialStep(0);
     else greet();
     // Location is asked for as the map appears, so the prompt doesn't cover the hatching.
     void locate();
   }, [greet, locate]);
   const finishIntro = useCallback(() => setIntro(false), []);
+  const askFromIntro = useCallback((prompt: string) => {
+    asked.current = true;
+    setTab("geesling");
+    setPendingRequest({ prompt });
+  }, []);
+  const consumePrompt = useCallback(() => setPendingRequest(null), []);
   const endTutorial = useCallback(() => {
     setTutorialStep(null);
     void AsyncStorage.setItem(TUTORIAL_KEY, "true").catch(() => {});
@@ -396,8 +409,8 @@ function Home() {
                 origin={location}
                 onLocate={locate}
                 freeOnly={filters.freeOnly}
-                initialRequest={null}
-                onPromptConsumed={noop}
+                initialRequest={pendingRequest}
+                onPromptConsumed={consumePrompt}
                 onInitialPromptComplete={noop}
                 onWalk={showWalk}
                 onSelectStop={(item, why) => selectItem(item, why)}
@@ -468,7 +481,7 @@ function Home() {
           onSkip={endTutorial}
         />
       ) : null}
-      {intro ? <HatchIntro nightMode={dark} onReveal={revealApp} onDone={finishIntro} /> : null}
+      {intro ? <HatchIntro nightMode={dark} now={now} onToggleTheme={toggleTheme} onReveal={revealApp} onDone={finishIntro} onAsk={askFromIntro} /> : null}
       {teamBanner}
     </View>
   );
