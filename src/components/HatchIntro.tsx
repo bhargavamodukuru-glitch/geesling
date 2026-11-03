@@ -5,6 +5,7 @@ import { AccessibilityInfo, Animated, Easing, KeyboardAvoidingView, Platform, Pr
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EGG, EGG_CRACKED, EGG_SPLIT, Pixels, SHELL_BOTTOM, SHELL_CAP } from "@/components/EggSprites";
 import { Goose } from "@/components/Goose";
+import { useMotion } from "@/hooks/useMotion";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { ClockChip } from "@/components/map/ClockChip";
 import { TorontoPixelBackdrop } from "@/components/TorontoPixelBackdrop";
@@ -116,15 +117,15 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
   const [curtain, setCurtain] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [prompt, setPrompt] = useState("");
-  // The examples rotate while the box is empty, and hold still once it's focused or with Reduce Motion on.
+  // The examples rotate while the box is empty, and hold still once it's focused or with animations off.
+  const { motion } = useMotion();
   const [example, setExample] = useState(0);
   const [focused, setFocused] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
-    if (prompt || focused || reduceMotion) return;
+    if (prompt || focused || !motion) return;
     const timer = setInterval(() => setExample((n) => (n + 1) % EXAMPLES.length), EXAMPLE_MS);
     return () => clearInterval(timer);
-  }, [prompt, focused, reduceMotion]);
+  }, [prompt, focused, motion]);
 
   const [roll] = useState(() => new Animated.Value(0));
   const [wiggle] = useState(() => new Animated.Value(0));
@@ -219,12 +220,12 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
     fadeOut();
   };
 
-  // While it waits to be tapped, the egg gives a couple of little wiggles, then sits still (motion stops within 5 s).
+  // While it waits to be tapped, the egg gives a little wiggle every couple of seconds, while animations are on.
   useEffect(() => {
-    if (!ready || stage === "hatched") return;
-    const timers = [1800, 3800].map((ms) => setTimeout(() => wiggleOnce(6, 80), ms));
-    return () => timers.forEach(clearTimeout);
-  }, [ready, stage, wiggleOnce]);
+    if (!ready || stage === "hatched" || !motion) return;
+    const timer = setInterval(() => wiggleOnce(6, 80), 2200);
+    return () => clearInterval(timer);
+  }, [ready, stage, motion, wiggleOnce]);
 
   // The egg rolls in (or, with Reduce Motion, Geesling is already up).
   useEffect(() => {
@@ -232,7 +233,6 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
     void AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
       if (cancelled) return;
       if (reduce) {
-        setReduceMotion(true);
         roll.setValue(1);
         hatch(true);
         setPose("fly");

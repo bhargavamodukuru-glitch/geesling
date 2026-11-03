@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { MotionProvider } from "@/hooks/useMotion";
 import { SavedProvider } from "@/hooks/useSaved";
 import { GeeslingLoader } from "@/components/GeeslingLoader";
 import { ensureSession, isConfigured } from "@/lib/supabase";
@@ -37,10 +38,12 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <SavedProvider>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.parchment } }} />
-      </SavedProvider>
+      <MotionProvider>
+        <SavedProvider>
+          <StatusBar style="dark" />
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.parchment } }} />
+        </SavedProvider>
+      </MotionProvider>
     </SafeAreaProvider>
   );
 }
