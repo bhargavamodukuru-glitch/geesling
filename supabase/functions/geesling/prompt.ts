@@ -34,7 +34,7 @@ export const TOOLS: Anthropic.Beta.BetaToolUnion[] = [
   {
     name: "search_events",
     description:
-      "Search Geesling's database of live and upcoming Toronto events (City of Toronto, Ticketmaster, Eventbrite). Returns events whose next session overlaps the time window, with price, RSVP and schedule details. Use the exact date range supplied in the current-request context when one is specified. Use short keyword queries (e.g. 'comedy', 'jazz', 'night market', 'drag'), or leave query empty and filter by categories.",
+      "Search Geesling's database of live and upcoming Toronto events (City of Toronto, Ticketmaster, Eventbrite, torevent.ca). Returns events whose next session overlaps the time window, with price, RSVP and schedule details. Use the exact date range supplied in the current-request context when one is specified. Use short keyword queries (e.g. 'comedy', 'jazz', 'night market', 'drag'), or leave query empty and filter by categories.",
     input_schema: {
       type: "object",
       properties: {

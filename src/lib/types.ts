@@ -3,7 +3,7 @@ import type { Choices } from "./choices";
 export interface EventItem {
   kind: "event";
   id: string;
-  source: "toronto" | "ticketmaster" | "eventbrite";
+  source: "toronto" | "ticketmaster" | "eventbrite" | "torevent";
   title: string;
   description: string | null;
   categories: string[];

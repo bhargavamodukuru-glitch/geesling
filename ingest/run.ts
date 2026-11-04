@@ -7,10 +7,12 @@ import { writeFileSync } from "node:fs";
 import type { IngestConfig, NormalizedEvent, SourceId, SourceResult } from "./lib/types.ts";
 import { dedupe } from "./lib/dedupe.ts";
 import { withWebLinks } from "./lib/url.ts";
-import { deleteStale, enabledEventbriteOrganizers, finishRun, startRun, storedEvents, upsertEvents, type Db } from "./lib/supabase.ts";
+import { deleteStale, enabledEventbriteOrganizers, finishRun, saveVenueLocations, startRun, storedEvents, upsertEvents, venueLocations, type Db } from "./lib/supabase.ts";
+import { memoryCache } from "./lib/geocode.ts";
 import { fetchToronto } from "./sources/toronto.ts";
 import { fetchTicketmaster } from "./sources/ticketmaster.ts";
 import { fetchEventbrite } from "./sources/eventbrite.ts";
+import { TOREVENT_FEED, fetchTorevent } from "./sources/torevent.ts";
 
 const TORONTO_FEED =
   "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/9201059e-43ed-4369-885e-0b867652feac/resource/8900fdb2-7f6c-4f50-8581-b463311ff05d/download/file.json";
@@ -39,7 +41,10 @@ async function main(): Promise<void> {
     eventbriteToken: env("EVENTBRITE_TOKEN"),
     eventbriteOrganizerIds: organizerIds,
     torontoFeedUrl: env("TORONTO_FEED_URL") ?? TORONTO_FEED,
+    toreventFeedUrl: env("TOREVENT_FEED_URL") ?? TOREVENT_FEED,
   };
+  // Venue coordinates already looked up (torevent lists addresses, not positions).
+  const venues = memoryCache(db ? await venueLocations(db) : []);
 
   if (db && !dryRun) await startRun(db, runId, startedAt);
 
@@ -47,6 +52,7 @@ async function main(): Promise<void> {
     ["toronto", fetchToronto],
     ["ticketmaster", fetchTicketmaster],
     ["eventbrite", fetchEventbrite],
+    ["torevent", (c) => fetchTorevent(c, venues)],
   ];
   const settled = await Promise.allSettled(jobs.map(([, fn]) => fn(config)));
 
@@ -64,6 +70,7 @@ async function main(): Promise<void> {
         fetched: result.value.fetched,
         normalized: result.value.events.length,
         skipped: result.value.skipped,
+        ...venueStats(result.value),
       };
     } else {
       failed.push(source);
@@ -82,6 +89,9 @@ async function main(): Promise<void> {
   stats.alcohol = winners.filter((e) => e.involves_alcohol).length;
   stats.rsvp = winners.filter((e) => e.rsvp_required).length;
 
+  // Venue lookups are kept even on a dry run against the database, so the work isn't repeated.
+  if (db && venues.fresh.length) await saveVenueLocations(db, venues.fresh);
+
   if (dryRun || !db) {
     writeFileSync("ingest-preview.json", JSON.stringify(winners.slice(0, 200), null, 2));
     console.log(JSON.stringify(stats, null, 2));
@@ -95,6 +105,11 @@ async function main(): Promise<void> {
   await finishRun(db, runId, stats);
   console.log(JSON.stringify(stats, null, 2));
   if (succeeded.length === 0) process.exitCode = 1;
+}
+
+/** torevent also reports its venue lookups. */
+function venueStats(result: SourceResult & { lookups?: number; unplaced?: number }): Record<string, number> {
+  return result.lookups === undefined ? {} : { venueLookups: result.lookups, venuesNotFound: result.unplaced ?? 0 };
 }
 
 main().catch((error) => {

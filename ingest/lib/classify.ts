@@ -156,6 +156,8 @@ export const SOURCE_PRIORITY: Record<NormalizedEvent["source"], number> = {
   toronto: 30,
   ticketmaster: 25,
   eventbrite: 20,
+  // A curated calendar that re-lists venue pages: the original listing wins a tie.
+  torevent: 15,
 };
 
 /** Completeness score (0–100) used to pick the single most accurate record among duplicates. */

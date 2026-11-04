@@ -1,4 +1,4 @@
-export type SourceId = "toronto" | "ticketmaster" | "eventbrite";
+export type SourceId = "toronto" | "ticketmaster" | "eventbrite" | "torevent";
 
 export const CATEGORIES = [
   "music",
@@ -71,4 +71,5 @@ export interface IngestConfig {
   eventbriteToken: string | null;
   eventbriteOrganizerIds: string[];
   torontoFeedUrl: string;
+  toreventFeedUrl: string;
 }

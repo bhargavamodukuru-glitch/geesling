@@ -14,6 +14,7 @@ const SOURCE_NAMES: Record<string, string> = {
   toronto: "City of Toronto",
   ticketmaster: "Ticketmaster",
   eventbrite: "Eventbrite",
+  torevent: "torevent.ca",
 };
 
 interface Props {

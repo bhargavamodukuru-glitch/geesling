@@ -1,5 +1,6 @@
 // Minimal PostgREST client (service role) — no dependencies, runs on Node 24.
 import type { NormalizedEvent, SourceId } from "./types.ts";
+import type { VenueLocation } from "./geocode.ts";
 
 export interface Db {
   url: string;
@@ -109,4 +110,27 @@ export async function deleteOldCitySpots(db: Db, sources: string[], runId: strin
     method: "DELETE",
     prefer: "return=minimal",
   });
+}
+
+/** Every venue looked up so far (lib/geocode.ts). */
+export async function venueLocations(db: Db): Promise<VenueLocation[]> {
+  const out: VenueLocation[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const response = await request(db, "venue_locations?select=key,lat,lng,looked_up_at&order=key", { headers: { Range: `${offset}-${offset + 999}` } });
+    const rows = (await response.json()) as VenueLocation[];
+    out.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  return out;
+}
+
+/** Saves this run's venue lookups, found or not. */
+export async function saveVenueLocations(db: Db, rows: VenueLocation[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += 500) {
+    await request(db, "venue_locations?on_conflict=key", {
+      method: "POST",
+      body: JSON.stringify(rows.slice(i, i + 500)),
+      prefer: "resolution=merge-duplicates,return=minimal",
+    });
+  }
 }
