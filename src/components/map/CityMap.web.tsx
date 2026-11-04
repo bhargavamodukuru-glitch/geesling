@@ -1,7 +1,7 @@
 /// <reference types="google.maps" />
 // Web map: Google Maps JavaScript API via @vis.gl/react-google-maps.
 import { AdvancedMarker, APIProvider, ColorScheme, ControlPosition, Map, Polyline, useMap } from "@vis.gl/react-google-maps";
-import { useEffect, useMemo } from "react";
+import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Panel } from "@/components/Pixel";
 import { Goose } from "@/components/Goose";
@@ -85,7 +85,62 @@ function CameraController({ walk, userLocation, focusKey }: Pick<CityMapProps, "
   return null;
 }
 
-export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSelect, onBoundsChange, dark = false }: CityMapProps) {
+// Google calls window.gm_authFailure when it refuses the key (e.g. a website not on the key's allow list).
+// Listeners are kept here so whichever map is showing hears it, even if it mounts after the failure.
+let mapsAuthFailed = false;
+const authListeners = new Set<() => void>();
+if (typeof window !== "undefined") {
+  (window as unknown as { gm_authFailure?: () => void }).gm_authFailure = () => {
+    mapsAuthFailed = true;
+    authListeners.forEach((listener) => listener());
+  };
+}
+
+/** Shown instead of the map when it can't load, so the rest of the app keeps working. */
+function MapUnavailable({ reason }: { reason: string }) {
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.missing]} accessibilityLiveRegion="polite">
+      <Panel style={styles.missingPanel}>
+        <Goose size={4} walking={false} />
+        <Text style={text.h2}>The map couldn’t load</Text>
+        <Text style={[text.body, { textAlign: "center" }]}>{reason} What’s on is still in Happening, and you can still ask Geesling for a route.</Text>
+      </Panel>
+    </View>
+  );
+}
+
+/** A crash inside Google's map (or a pin) stays inside the map instead of blanking the whole app. */
+class MapErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: Error) {
+    console.error("map crashed", error);
+  }
+  render() {
+    return this.state.failed ? <MapUnavailable reason="Something went wrong drawing it." /> : this.props.children;
+  }
+}
+
+export function CityMap(props: CityMapProps) {
+  const [authFailed, setAuthFailed] = useState(mapsAuthFailed);
+  useEffect(() => {
+    const listener = () => setAuthFailed(true);
+    authListeners.add(listener);
+    return () => {
+      authListeners.delete(listener);
+    };
+  }, []);
+  if (authFailed) return <MapUnavailable reason="Google didn’t accept the map key for this website." />;
+  return (
+    <MapErrorBoundary>
+      <GoogleCityMap {...props} />
+    </MapErrorBoundary>
+  );
+}
+
+function GoogleCityMap({ items, walk, selectedId, userLocation, focusKey, onSelect, onBoundsChange, dark = false }: CityMapProps) {
   const walkIds = useMemo(() => new globalThis.Map(walk?.stops.map((s) => [s.item.id, s.order]) ?? []), [walk]);
   const pins: MapItem[] = useMemo(() => {
     const stopItems = walk?.stops.map((s) => s.item) ?? [];
