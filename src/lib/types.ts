@@ -132,6 +132,8 @@ export interface ChatMessage {
   walk?: Walk | null;
   error?: boolean;
   musicCrawlerLink?: boolean;
+  /** Geesling's one-time "join to keep your routes" nudge, with a button to the account panel. */
+  join?: boolean;
   /** Tappable answers to the goose's follow-up question (plus Other). */
   choices?: Choices | null;
 }

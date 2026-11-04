@@ -25,6 +25,10 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     title: "💬 Feedback",
     body: "Something broken, or a great idea? Tell the team here. Geesling is in beta and we read everything.",
   },
+  {
+    title: "👤 You",
+    body: "Tell me a little about you, like your email and age range. It’s optional and helps me plan better days out for people like you.",
+  },
 ];
 
 interface Rect {

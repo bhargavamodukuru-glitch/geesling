@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Linking from "expo-linking";
 import { FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, View, type TextInputInstance } from "react-native";
@@ -48,12 +49,18 @@ interface Props {
   onSelectStop: (item: MapItem, why: string) => void;
   /** Geesling's opening line when nothing is on right now; the text box is focused so they can answer. */
   nudge?: string | null;
+  /** No details shared yet: after their first route, Geesling asks once (per device) to tell it about them. */
+  signedIn?: boolean;
+  onJoin?: () => void;
 }
+
+// Set once Geesling has suggested joining on this device, so it only asks once.
+const JOIN_NUDGE_KEY = "geesling.join.nudged";
 
 let counter = 0;
 const nextId = () => `m${Date.now()}-${counter++}`;
 
-export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPromptConsumed, onInitialPromptComplete, onWalk, onSelectStop, nudge = null }: Props) {
+export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPromptConsumed, onInitialPromptComplete, onWalk, onSelectStop, nudge = null, signedIn = false, onJoin }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [budget, setBudget] = useState<number | null>(null);
@@ -102,6 +109,14 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
         answered: request?.answered,
       }, setStep);
       setMessages((m) => [...m, { id: nextId(), role: "assistant", text: reply.message, walk: reply.walk, musicCrawlerLink, choices: reply.choices }]);
+      // After the first route on a signed-out device, one gentle suggestion to join.
+      if (reply.walk && !signedIn && onJoin) {
+        const seen = await AsyncStorage.getItem(JOIN_NUDGE_KEY).catch(() => "true");
+        if (!seen) {
+          void AsyncStorage.setItem(JOIN_NUDGE_KEY, "true").catch(() => {});
+          setMessages((m) => [...m, { id: nextId(), role: "assistant", text: "Like this route? Tell me a little about you and I’ll plan even better days out for people like you. It takes 30 seconds.", join: true }]);
+        }
+      }
       if (reply.walk) {
         const names = reply.walk.stops.map((s) => itemTitle(s.item));
         setPlan((prev) =>
@@ -119,7 +134,7 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
       if (initial) onInitialPromptComplete();
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
-  }, [busy, messages, origin, budget, freeOnly, onWalk, onInitialPromptComplete]);
+  }, [busy, messages, origin, budget, freeOnly, onWalk, onInitialPromptComplete, signedIn, onJoin]);
 
   // A tapped answer, or what they typed after Other, goes back with the original request.
   const answer = (choices: Choices, reply: string) => {
@@ -240,6 +255,7 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
                   <PixelButton label="Adjust" icon="🎚️" onPress={() => setAdjusting(true)} />
                 </View>
               ) : null}
+              {item.join && onJoin && !signedIn ? <PixelButton label="Tell Geesling about you" icon="👤" small tone="red" onPress={onJoin} /> : null}
               {item.musicCrawlerLink ? (
                 <PixelButton
                   label="Browse live music on MusicCrawler"
