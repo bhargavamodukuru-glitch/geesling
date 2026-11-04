@@ -19,6 +19,10 @@ const MAX_TURNS = 8;
 // A long outing (6+ hours) needs more searching, so it gets more turns and more thinking.
 const LONG_OUTING_MINUTES = 360;
 const LONG_MAX_TURNS = 11;
+// Output room per model turn, thinking included. A full-day plan (medium effort, 7–8 stops) needed ~3,900 of 4,096 and
+// sometimes ran out, leaving no walk; only tokens actually written are billed, so the higher cap costs nothing extra.
+const MAX_OUTPUT_TOKENS = 4096;
+const LONG_MAX_OUTPUT_TOKENS = 8192;
 // With this many turns left the guide is told to present what it has instead of searching more.
 const WRAP_UP_TURNS_LEFT = 2;
 const MAX_INTERSTOP_TRAVEL_SECONDS = 20 * 60;
@@ -582,6 +586,7 @@ async function handle(req: Request, meter: Meter, progress: (step: string) => vo
   let validatedStops: WalkStop[] | null = null;
   let askedToFill = false;
   let runRetries = 0;
+  let cutOffRetried = false;
   let timingRetries = 0;
   let bestRun: { walk: PresentWalkInput; stops: WalkStop[]; miss: number; meters: number } | null = null;
   // The best walk the guide built but we sent back, used if it runs out of turns before presenting another.
@@ -596,7 +601,7 @@ async function handle(req: Request, meter: Meter, progress: (step: string) => vo
       const turnStarted = Date.now();
       const response = await client.beta.messages.create({
         model: MODEL,
-        max_tokens: 4096,
+        max_tokens: longOuting ? LONG_MAX_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
         thinking: { type: "adaptive" },
@@ -621,6 +626,19 @@ async function handle(req: Request, meter: Meter, progress: (step: string) => vo
         continue;
       }
       lastStop = response.stop_reason;
+      // Cut off mid-reply (the half-written turn can't be kept): ask once more for the walk, written tighter.
+      if (response.stop_reason === "max_tokens" && !cutOffRetried && messages.length > 0) {
+        cutOffRetried = true;
+        console.warn("guide reply cut off; retrying once", { turn, out: response.usage.output_tokens });
+        const last = messages[messages.length - 1];
+        const nudge = { type: "text" as const, text: "Your last reply was cut off before it finished. Present the walk now with present_walk using what you've already found: keep each stop's description to one or two sentences and don't search again." };
+        if (last.role === "user") {
+          last.content = typeof last.content === "string" ? [{ type: "text", text: last.content }, nudge] : [...last.content, nudge];
+        } else {
+          messages.push({ role: "user", content: [nudge] });
+        }
+        continue;
+      }
       if (response.stop_reason !== "tool_use") break;
 
       const toolUses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
@@ -876,7 +894,10 @@ async function handle(req: Request, meter: Meter, progress: (step: string) => vo
   }
   if (!presented) {
     console.warn("no walk presented", { turns: messages.length, hadText: finalText !== "", known: known.size, stop: lastStop });
-    return json({ message: finalText || "Honk? Tell me a bit more — what are you in the mood for?", walk: null });
+    const fallbackMessage = lastStop === "max_tokens"
+      ? "Honk, I got tangled up planning that one. Send it again and I'll have another go!"
+      : "Honk? Tell me a bit more — what are you in the mood for?";
+    return json({ message: finalText || fallbackMessage, walk: null });
   }
 
   const chosen = (presented as PresentWalkInput).stops.slice(0, 8);
