@@ -21,8 +21,9 @@ import { colors, fonts } from "@/lib/theme";
 // goes, and its message bubble pops open ("I help you discover more of Toronto…") with quick replies (Date, Friends,
 // Solo, Try something new open the 3-step planner; Surprise me plans in one tap) and the person's own reply bubble to
 // type into (rotating examples), or "skip to the live map". A small "Skip intro" link jumps straight to Geesling in
-// its place with the chat open. Asking starts planning in the background and, for someone who hasn't shared their
-// details yet, shows the "about you" form while Geesling works; skipping shows it too. Then the screen fades to black
+// its place with the chat open. Every way in (asking, a vibe, Surprise me, skipping to the map) shows the "about you" form
+// first (filled in if this device shared details before); for a request it's the loading page while Geesling plans,
+// and after Save or "Skip for now" it waits with "Finishing your route…" until the route is ready. Then the screen fades to black
 // and back, video-game style, onto the map (and the answer). With Reduce Motion or the animations switch off, Geesling
 // is already in its place.
 
@@ -140,7 +141,10 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
   const [pop] = useState(() => new Animated.Value(0));
   const [plannerVibe, setPlannerVibe] = useState<Vibe | null>(null);
   const [form, setForm] = useState<"asked" | "skipped" | null>(null);
-  const { ready: accountReady, signedUp } = useAccount();
+  // Details this device shared before, if any: the form shows them filled in.
+  const { profile } = useAccount();
+  // After Save or "Skip for now" while the route is still being planned: the card stays up as the loading page.
+  const [finishing, setFinishing] = useState(false);
   const [pose, setPose] = useState<"sit" | "walk" | "fly">("sit");
   const [capOff, setCapOff] = useState(false);
   // 0 = clear, FADE_STEPS = black. `revealed` once the app is showing behind the curtain.
@@ -226,13 +230,12 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
     ]).start();
   }, [wiggle]);
 
-  // The form only shows to someone who hasn't shared their details on this device.
-  const needsForm = accountReady && !signedUp;
+  // Every way in (typed request, a vibe's planner, Surprise me, skip to the live map) goes through the "about you"
+  // form first; for a request it's also the loading page while Geesling plans.
   const send = (request: PlanRequest) => {
     if (fading.current) return;
     onAsk(request);
-    if (needsForm) setForm("asked");
-    else fadeOut();
+    setForm("asked");
   };
   const ask = () => {
     const value = prompt.trim();
@@ -243,9 +246,24 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
   const pickVibe = (vibe: Vibe) => (vibe === "surprise" ? surprise() : setPlannerVibe(vibe));
   const skip = () => {
     if (fading.current) return;
-    if (needsForm) setForm("skipped");
+    setForm("skipped");
+  };
+  // Leaving the form: straight to the map, or (for a request still being planned) wait on this card until it's ready.
+  const planFinished = planStatus === "ready" || planStatus === "done";
+  const leaveForm = () => {
+    if (form === "asked" && !planFinished) setFinishing(true);
     else fadeOut();
   };
+  useEffect(() => {
+    if (!finishing) return;
+    if (planFinished) {
+      fadeOut();
+      return;
+    }
+    // Never strand anyone here: after a minute and a half, go to the map, where the chat keeps working.
+    const giveUp = setTimeout(fadeOut, 90_000);
+    return () => clearTimeout(giveUp);
+  }, [finishing, planFinished, fadeOut]);
 
   // The hello pops in like a new message (no pop with animations off).
   useEffect(() => {
@@ -377,28 +395,45 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
           >
             {form ? (
               <Panel style={[styles.askCard, styles.formCard]} shadow={4}>
-                <ScrollView contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
-                  <Text style={styles.speaker}>GEESLING</Text>
-                  <Text style={styles.line} accessibilityRole="header">
-                    {form === "asked" ? "On it! While I plan your route, tell me a little about you." : "Before you explore, tell me a little about you."}
-                  </Text>
-                  {/* While they fill this in, Geesling's planning carries on; its progress shows here. */}
-                  {form === "asked" ? (
-                    <View style={[styles.progress, planStatus === "ready" && styles.progressDone]} accessibilityLiveRegion="polite">
-                      {planStatus === "ready" || planStatus === "done" ? (
-                        <Text style={styles.progressText}>
-                          {planStatus === "ready" ? "✓ Your route is ready! Save your details or skip to see it." : "✓ I have an answer for you. Save your details or skip to see it."}
-                        </Text>
-                      ) : (
-                        <>
-                          <Goose size={2} walking={false} flapping />
-                          <Text style={styles.progressText}>{planStatus ?? "Reading your request"}…</Text>
-                        </>
-                      )}
-                    </View>
-                  ) : null}
-                  <AboutYouForm onSaved={fadeOut} secondary={{ label: "Skip for now", onPress: fadeOut }} />
-                </ScrollView>
+                {finishing ? (
+                  // The loading page after the form: Geesling finishing the route.
+                  <View style={styles.finishing} accessibilityLiveRegion="polite">
+                    <Text style={styles.speaker}>GEESLING</Text>
+                    <Goose size={4} walking={false} flapping />
+                    <Text style={[styles.line, styles.centered]} accessibilityRole="header">Thanks! Finishing your route…</Text>
+                    <Text style={[styles.progressText, styles.centered]}>{planStatus && !planFinished ? `${planStatus}…` : "Almost there…"}</Text>
+                  </View>
+                ) : (
+                  <ScrollView contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
+                    <Text style={styles.speaker}>GEESLING</Text>
+                    <Text style={styles.line} accessibilityRole="header">
+                      {form === "asked"
+                        ? profile
+                          ? "On it! While I plan your route, check your details are still right."
+                          : "On it! While I plan your route, tell me a little about you."
+                        : profile
+                          ? "Before you explore, check your details are still right."
+                          : "Before you explore, tell me a little about you."}
+                    </Text>
+                    {/* While they fill this in, Geesling's planning carries on; its progress shows here. */}
+                    {form === "asked" ? (
+                      <View style={[styles.progress, planStatus === "ready" && styles.progressDone]} accessibilityLiveRegion="polite">
+                        {planFinished ? (
+                          <Text style={styles.progressText}>
+                            {planStatus === "ready" ? "✓ Your route is ready! Save your details or skip to see it." : "✓ I have an answer for you. Save your details or skip to see it."}
+                          </Text>
+                        ) : (
+                          <>
+                            <Goose size={2} walking={false} flapping />
+                            <Text style={styles.progressText}>{planStatus ?? "Reading your request"}…</Text>
+                          </>
+                        )}
+                      </View>
+                    ) : null}
+                    {/* Keyed so details that arrive after the form opened still fill it in. */}
+                    <AboutYouForm key={profile ? "known" : "new"} initial={profile} onSaved={leaveForm} secondary={{ label: "Skip for now", onPress: leaveForm }} />
+                  </ScrollView>
+                )}
               </Panel>
             ) : plannerVibe ? (
               <ScrollView style={styles.plannerScroll} contentContainerStyle={styles.plannerContent} keyboardShouldPersistTaps="handled">
@@ -576,6 +611,8 @@ const styles = StyleSheet.create({
   line: { fontFamily: fonts.body, fontSize: 23, lineHeight: 25, color: colors.ink },
   progress: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.parchment, borderWidth: 2, borderColor: colors.ink, padding: 8 },
   progressDone: { backgroundColor: "#E2EFD0" },
+  finishing: { alignItems: "center", gap: 12, paddingVertical: 12 },
+  centered: { textAlign: "center" },
   progressText: { flex: 1, fontFamily: fonts.body, fontSize: 19, lineHeight: 20, color: colors.ink },
   input: { minHeight: 60, maxHeight: 140, backgroundColor: "transparent", paddingHorizontal: 8, paddingVertical: 8, fontFamily: fonts.body, fontSize: 21, color: colors.ink, textAlignVertical: "top" },
   askRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
