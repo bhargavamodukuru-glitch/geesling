@@ -1,0 +1,11 @@
+# Cloudflare Worker that puts the Expo-hosted site on geesling.ca (free plan).
+# Deploy: npx wrangler@4 deploy   (from this folder, after `npx wrangler@4 login` once)
+name = "geesling-domain"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Custom domains: Cloudflare creates the DNS records and the certificate for these automatically.
+routes = [
+  { pattern = "geesling.ca", custom_domain = true },
+  { pattern = "www.geesling.ca", custom_domain = true },
+]

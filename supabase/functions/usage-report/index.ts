@@ -27,7 +27,7 @@ interface Report {
 
 const RATING_LABEL: Record<number, string> = { 3: "😍 Love it", 2: "🙂 It's okay", 1: "😕 Not great" };
 
-const SITE = "https://geesling.expo.app";
+const SITE = "https://geesling.ca";
 
 interface CommentRow {
   created: string;
