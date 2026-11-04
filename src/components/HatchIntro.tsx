@@ -15,8 +15,8 @@ import { HALLOWEEN } from "@/lib/season";
 import { colors, fonts } from "@/lib/theme";
 
 // Opening screen: an egg rolls in over the skyline, cracks and hatches on its own; Geesling (the same Geesling as
-// everywhere else in the app) steps out, flies up over its egg and says hello. "Next" brings its second line with the
-// text box (rotating examples) and "skip to the live map". Asking starts planning in the background and, for someone
+// everywhere else in the app) steps out, flies up over its egg and says hello; a moment after the hello finishes, its second
+// line comes on its own ("Skip" brings it straight away) with the text box (rotating examples) and "skip to the live map". Asking starts planning in the background and, for someone
 // who hasn't shared their details yet, shows the "about you" form while Geesling works; skipping shows it too. Then
 // the screen fades to black and back, video-game style, onto the map (and the answer). With Reduce Motion on,
 // Geesling is already hatched and hovering.
@@ -29,6 +29,8 @@ const LINES = [
   "I help you see what’s going on in Toronto, whether you need help planning a date or have some time to kill. Simply tell me what you’re in the mood for and let me do the rest!",
 ];
 const TYPE_MS = 28;
+// How long the hello stays up, once typed out, before the second line comes on its own.
+const HELLO_READ_MS = 2200;
 
 // Example requests that take turns in the empty text box.
 const EXAMPLES = [
@@ -240,10 +242,16 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
     const timer = setTimeout(() => setTyped((n) => n + 1), TYPE_MS);
     return () => clearTimeout(timer);
   }, [line, typed, motion]);
-  const nextLine = () => {
+  const nextLine = useCallback(() => {
     setLine(1);
     setTyped(0);
-  };
+  }, []);
+  // Once the hello has typed out, the second line follows by itself after a moment to read it.
+  useEffect(() => {
+    if (line !== 0 || typed < LINES[0].length) return;
+    const timer = setTimeout(nextLine, HELLO_READ_MS);
+    return () => clearTimeout(timer);
+  }, [line, typed, nextLine]);
 
   // The egg rolls in (or, with Reduce Motion, Geesling is already up).
   useEffect(() => {
@@ -339,7 +347,7 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
                 {line === 0 ? (
                   <View style={styles.askRow}>
                     <View />
-                    <PixelButton label="Next" tone="red" onPress={nextLine} />
+                    <PixelButton label="Skip" tone="red" onPress={nextLine} />
                   </View>
                 ) : (
                   <>
