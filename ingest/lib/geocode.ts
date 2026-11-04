@@ -32,13 +32,20 @@ export function venueKey(location: string): string {
  * Canada": the street address alone finds most venues; the venue's name finds the rest.
  */
 export function addressQueries(location: string, venue: string | null): string[] {
-  const parts = location.split(",").map((p) => p.trim()).filter(Boolean);
-  const withoutCountry = parts.filter((p) => !/^canada$/i.test(p));
-  const startsWithVenue = venue && withoutCountry[0]?.toLowerCase() === venue.trim().toLowerCase();
-  const street = (startsWithVenue ? withoutCountry.slice(1) : withoutCountry).join(", ");
+  // Web links and the country add nothing to a search.
+  const parts = location.split(",").map((p) => p.trim()).filter((p) => p && !/^https?:\/\//i.test(p) && !/^canada$/i.test(p));
+  const startsWithVenue = venue && parts[0]?.toLowerCase() === venue.trim().toLowerCase();
+  const rest = startsWithVenue ? parts.slice(1) : parts;
+  // A building name can sit before the street ("Jane Mallett Theatre, Toronto Centre for the Arts, 27 Front St E"):
+  // the address starts at the first part with a street number.
+  const firstNumber = rest.findIndex((p) => /^\d/.test(p));
+  const street = (firstNumber > 0 ? rest.slice(firstNumber) : rest).join(", ");
   // OpenStreetMap rarely knows unit numbers: "1411 Dufferin St Unit B" is found as "1411 Dufferin St".
   const noUnit = street.replace(/\s*[,#]?\s*\b(unit|suite|ste|floor|fl|room|rm)\.?\s*[\w-]+/gi, "").replace(/\s+#\s*[\w-]+/g, "");
-  const queries = [street, noUnit, venue ? `${venue}, Toronto` : null].filter((q): q is string => Boolean(q && /\d|toronto/i.test(q)));
+  // Some addresses are only found without the postal code and province: "178 Victoria St, Toronto".
+  const [first, city] = noUnit.split(",").map((p) => p.trim());
+  const short = first && city && /^\d/.test(first) ? `${first}, ${city.replace(/\s+on\b.*$/i, "")}` : null;
+  const queries = [street, noUnit, short, venue ? `${venue}, Toronto` : null].filter((q): q is string => Boolean(q && /\d|toronto/i.test(q)));
   return [...new Set(queries)];
 }
 
@@ -76,9 +83,11 @@ export async function locateVenues(
   let lookups = 0;
   let missing = 0;
   const retryBefore = now.getTime() - RETRY_MISS_DAYS * 86_400_000;
+  const seen = new Set<string>();
   for (const { location, venue } of venues) {
     const key = venueKey(location);
-    if (found.has(key)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const cached = cache.get(key);
     if (cached?.lat != null && cached.lng != null) {
       found.set(key, { lat: cached.lat, lng: cached.lng });

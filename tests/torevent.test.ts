@@ -61,13 +61,21 @@ test("past events are dropped", () => {
 });
 
 test("address searches try the street first, then the venue's name", () => {
-  assert.deepEqual(addressQueries(sample.location!, "Revue Cinema"), ["400 Roncesvalles Ave, Toronto, ON M6R 2M9", "Revue Cinema, Toronto"]);
+  assert.deepEqual(addressQueries(sample.location!, "Revue Cinema"), ["400 Roncesvalles Ave, Toronto, ON M6R 2M9", "400 Roncesvalles Ave, Toronto", "Revue Cinema, Toronto"]);
   assert.deepEqual(addressQueries("Online", "Online"), ["Online, Toronto"]);
   assert.deepEqual(addressQueries("Pix Film Gallery,1411 Dufferin St Unit B, Toronto, ON M6H 4C7, Canada", "Pix Film Gallery"), [
     "1411 Dufferin St Unit B, Toronto, ON M6H 4C7",
     "1411 Dufferin St, Toronto, ON M6H 4C7",
+    "1411 Dufferin St, Toronto",
     "Pix Film Gallery, Toronto",
   ]);
+  assert.deepEqual(addressQueries("Jane Mallett Theatre,Toronto Centre for the Arts,27 Front St E, Toronto, ON M5E 1B4, Canada", "Jane Mallett Theatre"), [
+    "27 Front St E, Toronto, ON M5E 1B4",
+    "27 Front St E, Toronto",
+    "Jane Mallett Theatre, Toronto",
+  ]);
+  assert.deepEqual(addressQueries("Glendon Theatre,2275 Bayview Ave, North York, ON M4N 3M6, Canada,https://example.com/events", "Glendon Theatre")[0], "2275 Bayview Ave, North York, ON M4N 3M6");
+  assert.deepEqual(addressQueries("TD Music Hall,178 Victoria St, Toronto, ON M5B 1T6, Canada", "TD Music Hall")[1], "178 Victoria St, Toronto");
   assert.equal(venueKey(" Revue Cinema , 400  Roncesvalles "), "revue cinema,400 roncesvalles");
 });
 
