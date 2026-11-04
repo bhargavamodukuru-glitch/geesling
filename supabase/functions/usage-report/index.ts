@@ -165,12 +165,17 @@ Deno.serve(async (req) => {
     }
     const PERSONA: Record<string, string> = { newcomer: "New to Toronto", tourist: "Visiting", student: "Student", passing: "Passing through", local: "Local" };
     const AGE: Record<string, string> = { under_18: "Under 18", "18_24": "18–24", "25_30": "25–30", "31_40": "31–40", "41_plus": "41+" };
+    // "+14165550147" → "(416) 555-0147": readable, and it doesn't start with "+", which the CSV guard would prefix.
+    const phone = (p: string | null) => {
+      const m = p?.match(/^\+1(\d{3})(\d{3})(\d{4})$/);
+      return m ? `(${m[1]}) ${m[2]}-${m[3]}` : p;
+    };
     const rows: Row[] = [
       ["Joined (Toronto)", "Email", "Phone", "Brings them to Toronto", "Age", "Updates opt-in", "Opted in at", "Routes", "Last route"],
       ...(users as UserRow[]).map((u) => [
         u.joined,
         u.email,
-        u.phone,
+        phone(u.phone),
         u.persona ? PERSONA[u.persona] ?? u.persona : null,
         u.age_range ? AGE[u.age_range] ?? u.age_range : null,
         u.marketing_opt_in ? "Yes" : "No",

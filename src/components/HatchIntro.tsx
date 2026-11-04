@@ -1,10 +1,12 @@
 import { createAudioPlayer, type AudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { AccessibilityInfo, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AboutYouForm } from "@/components/AboutYouForm";
 import { EGG, EGG_CRACKED, EGG_SPLIT, Pixels, SHELL_BOTTOM, SHELL_CAP } from "@/components/EggSprites";
 import { Goose } from "@/components/Goose";
+import { useAccount } from "@/hooks/useAccount";
 import { useMotion } from "@/hooks/useMotion";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { ClockChip } from "@/components/map/ClockChip";
@@ -12,12 +14,21 @@ import { TorontoPixelBackdrop } from "@/components/TorontoPixelBackdrop";
 import { HALLOWEEN } from "@/lib/season";
 import { colors, fonts } from "@/lib/theme";
 
-// Opening screen: "Ask Geesling" and a text box come first. Below, an egg rolls in over the skyline and wiggles
-// until it's tapped; each tap cracks it more, and the third hatches Geesling (the same Geesling as everywhere else
-// in the app), who steps out and flies up above its egg. Asking a question, or "skip to the live map", fades to
-// black and back, video-game style, onto the map. With Reduce Motion on, Geesling is already hatched and hovering.
+// Opening screen: an egg rolls in over the skyline, cracks and hatches on its own; Geesling (the same Geesling as
+// everywhere else in the app) steps out, flies up over its egg and says hello. "Next" brings its second line with the
+// text box (rotating examples) and "skip to the live map". Asking starts planning in the background and, for someone
+// who hasn't shared their details yet, shows the "about you" form while Geesling works; skipping shows it too. Then
+// the screen fades to black and back, video-game style, onto the map (and the answer). With Reduce Motion on,
+// Geesling is already hatched and hovering.
 
 type Stage = "egg" | "cracked" | "split" | "hatched";
+
+// What Geesling says, in order. The text box comes with the second line.
+const LINES = [
+  "Hi, welcome to Geesling, your one-stop shop for everything Toronto!",
+  "I help you see what’s going on in Toronto, whether you need help planning a date or have some time to kill. Simply tell me what you’re in the mood for and let me do the rest!",
+];
+const TYPE_MS = 28;
 
 // Example requests that take turns in the empty text box.
 const EXAMPLES = [
@@ -98,19 +109,25 @@ interface Props {
   onReveal: () => void;
   /** The fade back from black has finished. */
   onDone: () => void;
-  /** They typed a question: the app opens the chat with it once the map shows. */
+  /** They typed a question: the app starts planning it now and opens the chat with it once the map shows. */
   onAsk: (prompt: string) => void;
+  /** Geesling's planning progress (the current step, then "ready" or "done"), shown on the form while it waits. */
+  planStatus: string | null;
 }
 
-export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, onAsk }: Props) {
+export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, onAsk, planStatus }: Props) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const px = width < 420 ? 7 : 9;
   const play = useSounds();
 
   const [stage, setStage] = useState<Stage>("egg");
-  // The egg can be tapped once it has rolled in.
-  const [ready, setReady] = useState(false);
+  // Which of Geesling's lines is showing (-1 = not talking yet), how much of it has typed out, and whether the
+  // "about you" form has taken over the card.
+  const [line, setLine] = useState(-1);
+  const [typed, setTyped] = useState(0);
+  const [form, setForm] = useState<"asked" | "skipped" | null>(null);
+  const { ready: accountReady, signedUp } = useAccount();
   const [pose, setPose] = useState<"sit" | "walk" | "fly">("sit");
   const [capOff, setCapOff] = useState(false);
   // 0 = clear, FADE_STEPS = black. `revealed` once the app is showing behind the curtain.
@@ -198,34 +215,35 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
     ]).start();
   }, [wiggle]);
 
-  // Each tap cracks the egg a little more; the third hatches Geesling, and the rest of the scene plays on its own.
-  const tapEgg = () => {
-    if (!ready || fading.current) return;
-    if (stage === "egg" || stage === "cracked") {
-      wiggleOnce(stage === "egg" ? 12 : 16, stage === "egg" ? 60 : 45);
-      setStage(stage === "egg" ? "cracked" : "split");
-      play("crack");
-      buzz("crack");
-    } else if (stage === "split") {
-      hatch();
-      later(800, stepOut);
-      later(1700, flyUp);
-    }
-  };
-
+  // The form only shows to someone who hasn't shared their details on this device.
+  const needsForm = accountReady && !signedUp;
   const ask = () => {
     const value = prompt.trim();
     if (!value || fading.current) return;
     onAsk(value);
-    fadeOut();
+    if (needsForm) setForm("asked");
+    else fadeOut();
+  };
+  const skip = () => {
+    if (fading.current) return;
+    if (needsForm) setForm("skipped");
+    else fadeOut();
   };
 
-  // While it waits to be tapped, the egg gives a little wiggle every couple of seconds, while animations are on.
+  // Geesling's line types out a letter at a time (all at once with animations off).
   useEffect(() => {
-    if (!ready || stage === "hatched" || !motion) return;
-    const timer = setInterval(() => wiggleOnce(6, 80), 2200);
-    return () => clearInterval(timer);
-  }, [ready, stage, motion, wiggleOnce]);
+    if (line < 0 || typed >= LINES[line].length) return;
+    if (!motion) {
+      const done = setTimeout(() => setTyped(LINES[line].length), 0);
+      return () => clearTimeout(done);
+    }
+    const timer = setTimeout(() => setTyped((n) => n + 1), TYPE_MS);
+    return () => clearTimeout(timer);
+  }, [line, typed, motion]);
+  const nextLine = () => {
+    setLine(1);
+    setTyped(0);
+  };
 
   // The egg rolls in (or, with Reduce Motion, Geesling is already up).
   useEffect(() => {
@@ -238,14 +256,22 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
         setPose("fly");
         setCapOff(true);
         gooseY.setValue(-HOVER * px);
+        setLine(0);
+        setTyped(LINES[0].length);
         return;
       }
+      // Rolls in, wiggles, cracks twice and hatches on its own; then Geesling steps out, flies up and talks.
       Animated.timing(roll, { toValue: 1, duration: 1300, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }).start();
-      later(1300, () => {
-        buzz("tap");
-        setReady(true);
-        wiggleOnce(8, 70);
-      });
+      later(1300, () => buzz("tap"));
+      later(1600, () => wiggleOnce(8, 70));
+      later(2050, () => { setStage("cracked"); play("crack"); buzz("crack"); });
+      later(2500, () => wiggleOnce(12, 60));
+      later(2950, () => { setStage("split"); play("crack"); buzz("crack"); });
+      later(3300, () => wiggleOnce(16, 45));
+      later(3700, () => hatch());
+      later(4500, stepOut);
+      later(5400, flyUp);
+      later(6300, () => setLine(0));
     });
     const pending = timers;
     return () => {
@@ -270,50 +296,85 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
           <TorontoPixelBackdrop nightMode={nightMode} />
           {HALLOWEEN ? <HalloweenDecor /> : null}
 
-          {/* Asking Geesling comes first; the egg plays out below. */}
-          {/* Centred in the space between the clock and Geesling hovering over its egg (shell 8 + hover + 16 tall, in pixels). */}
+          {/* Geesling's speech (and then the form), centred between the clock and Geesling hovering over its egg
+              (shell 8 + hover + 16 tall, in pixels). The form is taller, so it gets the whole screen above the grass. */}
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={[styles.askArea, { top: insets.top + 50, bottom: STAGE_BOTTOM + (8 + HOVER + 16) * px + 12 }]}
+            style={[styles.askArea, { top: insets.top + 50, bottom: form ? STAGE_BOTTOM + 12 : STAGE_BOTTOM + (8 + HOVER + 16) * px + 12 }]}
             pointerEvents="box-none"
           >
-            <Panel style={styles.askCard} shadow={4}>
-              <Text style={styles.speaker}>GEESLING</Text>
-              <Text style={styles.headline} accessibilityRole="header">
-                Don’t know where to go today? Ask Geesling!
-              </Text>
-              <Text style={styles.statText}>
-                Geesling plans your day out <Text style={styles.bold}>85% faster</Text>, following your budget and time constraints.
-              </Text>
-              <TextInput
-                value={prompt}
-                onChangeText={setPrompt}
-                placeholder={EXAMPLES[example]}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                placeholderTextColor={colors.inkSoft}
-                style={styles.input}
-                multiline
-                maxLength={1200}
-                accessibilityLabel="Tell Geesling what you're in the mood for"
-                submitBehavior="submit"
-                returnKeyType="send"
-                onSubmitEditing={ask}
-                onKeyPress={(event) => {
-                  const native = event.nativeEvent as { key: string; shiftKey?: boolean };
-                  if (Platform.OS === "web" && native.key === "Enter" && !native.shiftKey) {
-                    event.preventDefault();
-                    ask();
-                  }
-                }}
-              />
-              <View style={styles.askRow}>
-                <Pressable onPress={fadeOut} accessibilityRole="button" accessibilityLabel="Skip to the live map" hitSlop={8}>
-                  <Text style={styles.mapLink}>or skip to the live map →</Text>
-                </Pressable>
-                <PixelButton label="Ask" tone="red" disabled={!prompt.trim()} onPress={ask} />
-              </View>
-            </Panel>
+            {form ? (
+              <Panel style={[styles.askCard, styles.formCard]} shadow={4}>
+                <ScrollView contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
+                  <Text style={styles.speaker}>GEESLING</Text>
+                  <Text style={styles.line} accessibilityRole="header">
+                    {form === "asked" ? "On it! While I plan your route, tell me a little about you." : "Before you explore, tell me a little about you."}
+                  </Text>
+                  {/* While they fill this in, Geesling's planning carries on; its progress shows here. */}
+                  {form === "asked" ? (
+                    <View style={[styles.progress, planStatus === "ready" && styles.progressDone]} accessibilityLiveRegion="polite">
+                      {planStatus === "ready" || planStatus === "done" ? (
+                        <Text style={styles.progressText}>
+                          {planStatus === "ready" ? "✓ Your route is ready! Save your details or skip to see it." : "✓ I have an answer for you. Save your details or skip to see it."}
+                        </Text>
+                      ) : (
+                        <>
+                          <Goose size={2} walking={false} flapping />
+                          <Text style={styles.progressText}>{planStatus ?? "Reading your request"}…</Text>
+                        </>
+                      )}
+                    </View>
+                  ) : null}
+                  <AboutYouForm onSaved={fadeOut} secondary={{ label: "Skip for now", onPress: fadeOut }} />
+                </ScrollView>
+              </Panel>
+            ) : line >= 0 ? (
+              <Panel style={styles.askCard} shadow={4}>
+                <Text style={styles.speaker}>GEESLING</Text>
+                <Text style={styles.line} accessibilityLiveRegion="polite">
+                  {LINES[line].slice(0, typed)}
+                  {/* Keeps the box its full size while the line types out. */}
+                  <Text style={styles.unseen}>{LINES[line].slice(typed)}</Text>
+                </Text>
+                {line === 0 ? (
+                  <View style={styles.askRow}>
+                    <View />
+                    <PixelButton label="Next" tone="red" onPress={nextLine} />
+                  </View>
+                ) : (
+                  <>
+                    <TextInput
+                      value={prompt}
+                      onChangeText={setPrompt}
+                      placeholder={EXAMPLES[example]}
+                      onFocus={() => setFocused(true)}
+                      onBlur={() => setFocused(false)}
+                      placeholderTextColor={colors.inkSoft}
+                      style={styles.input}
+                      multiline
+                      maxLength={1200}
+                      accessibilityLabel="Tell Geesling what you're in the mood for"
+                      submitBehavior="submit"
+                      returnKeyType="send"
+                      onSubmitEditing={ask}
+                      onKeyPress={(event) => {
+                        const native = event.nativeEvent as { key: string; shiftKey?: boolean };
+                        if (Platform.OS === "web" && native.key === "Enter" && !native.shiftKey) {
+                          event.preventDefault();
+                          ask();
+                        }
+                      }}
+                    />
+                    <View style={styles.askRow}>
+                      <Pressable onPress={skip} accessibilityRole="button" accessibilityLabel="Skip to the live map" hitSlop={8}>
+                        <Text style={styles.mapLink}>or skip to the live map →</Text>
+                      </Pressable>
+                      <PixelButton label="Ask" tone="red" disabled={!prompt.trim()} onPress={ask} />
+                    </View>
+                  </>
+                )}
+              </Panel>
+            ) : null}
           </KeyboardAvoidingView>
 
           <View style={styles.stage} pointerEvents="box-none">
@@ -346,17 +407,9 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
                 </Animated.View>
               </View>
             ) : (
-              <Pressable
-                onPress={tapEgg}
-                disabled={!ready}
-                hitSlop={30}
-                accessibilityRole="button"
-                accessibilityLabel={stage === "split" ? "Geesling's egg is about to hatch. Tap it." : "Geesling's egg. Tap it to help it hatch."}
-              >
-                <Animated.View style={{ transform: [{ translateX }, { rotate: spin }, { rotate: tilt }] }}>
-                  <Pixels grid={egg} size={px} />
-                </Animated.View>
-              </Pressable>
+              <Animated.View style={{ transform: [{ translateX }, { rotate: spin }, { rotate: tilt }] }} accessibilityRole="image" accessibilityLabel="Geesling's egg, hatching">
+                <Pixels grid={egg} size={px} />
+              </Animated.View>
             )}
             {stage === "hatched"
               ? BURST.map(([dx, dy], i) => (
@@ -384,11 +437,6 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
             <ClockChip now={now} dark={nightMode} onToggle={onToggleTheme} />
           </View>
 
-          {ready && stage !== "hatched" ? (
-            <Text style={[styles.tapHint, nightMode && styles.tapHintNight]} pointerEvents="none">
-              {stage === "split" ? "One more tap!" : "Tap the egg!"}
-            </Text>
-          ) : null}
         </View>
       ) : null}
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.curtain, { opacity: curtain / FADE_STEPS }]} />
@@ -409,15 +457,14 @@ const styles = StyleSheet.create({
   clockRow: { position: "absolute", left: 0, right: 0, height: 44, zIndex: 6 },
   askCard: { width: "100%", maxWidth: 480, gap: 10, padding: 16, backgroundColor: colors.paper },
   speaker: { fontFamily: fonts.heading, fontSize: 13, color: colors.accent, letterSpacing: 1 },
-  headline: { fontFamily: fonts.heading, fontSize: 24, lineHeight: 28, color: colors.ink },
-  statText: { fontFamily: fonts.body, fontSize: 21, lineHeight: 22, color: colors.ink },
-  // The body font has no bold, so a 1-pixel shadow in the same colour thickens the strokes instead.
-  bold: { fontWeight: "700", textShadowColor: colors.ink, textShadowOffset: { width: 1, height: 0 }, textShadowRadius: 0 },
+  formCard: { maxHeight: "100%" },
+  line: { fontFamily: fonts.body, fontSize: 23, lineHeight: 25, color: colors.ink },
+  unseen: { opacity: 0 },
+  progress: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.parchment, borderWidth: 2, borderColor: colors.ink, padding: 8 },
+  progressDone: { backgroundColor: "#E2EFD0" },
+  progressText: { flex: 1, fontFamily: fonts.body, fontSize: 19, lineHeight: 20, color: colors.ink },
   input: { minHeight: 64, maxHeight: 140, backgroundColor: colors.white, borderWidth: 3, borderColor: colors.ink, paddingHorizontal: 10, paddingVertical: 8, fontFamily: fonts.body, fontSize: 21, color: colors.ink, textAlignVertical: "top" },
   askRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   mapLink: { fontFamily: fonts.body, fontSize: 18, color: colors.inkSoft, textDecorationLine: "underline" },
-  // Dark text on a paper chip, readable over any part of the scene.
-  tapHint: { position: "absolute", bottom: 4, alignSelf: "center", fontFamily: fonts.heading, fontSize: 17, color: colors.ink, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 8, paddingVertical: 2, overflow: "hidden" },
-  tapHintNight: { color: "#FFF8E6", backgroundColor: "#34435D", borderColor: "#D8C59A" },
   decor: { position: "absolute" },
 });

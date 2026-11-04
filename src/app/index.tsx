@@ -11,7 +11,6 @@ import { CityMap } from "@/components/map/CityMap";
 import { ClockChip } from "@/components/map/ClockChip";
 import { MapGreeting } from "@/components/map/MapGreeting";
 import { RouteKey } from "@/components/map/RouteKey";
-import { AccountPanel } from "@/components/panels/AccountPanel";
 import { FeedbackPanel } from "@/components/panels/FeedbackPanel";
 import { GeeslingPanel } from "@/components/panels/GeeslingPanel";
 import { HappeningPanel } from "@/components/panels/HappeningPanel";
@@ -19,7 +18,6 @@ import { SavedPanel } from "@/components/panels/SavedPanel";
 import { PixelButton } from "@/components/Pixel";
 import { SetupNotice } from "@/components/SetupNotice";
 import { useLocation } from "@/hooks/useLocation";
-import { useAccount } from "@/hooks/useAccount";
 import { useSaved } from "@/hooks/useSaved";
 import { fetchEventsInBounds, joinTeam } from "@/lib/api";
 import { OUT_OF_AREA_MESSAGE, TORONTO_BOUNDS, isInToronto, isViewInToronto } from "@/lib/area";
@@ -29,7 +27,7 @@ import { isConfigured } from "@/lib/supabase";
 import { colors, fonts, pixelShadow } from "@/lib/theme";
 import type { Bounds, EventFilters, EventItem, MapItem, Walk } from "@/lib/types";
 
-type Tab = "happening" | "saved" | "geesling" | "feedback" | "account";
+type Tab = "happening" | "saved" | "geesling" | "feedback";
 
 // The menu along the bottom, like apps on an iPhone dock. Each opens its section as a sheet over the map.
 const MENU: { key: Tab; label: string; title: string; icon: string | null; tile: string }[] = [
@@ -37,7 +35,6 @@ const MENU: { key: Tab; label: string; title: string; icon: string | null; tile:
   { key: "saved", label: "Saved", title: "Saved", icon: "⭐", tile: colors.gold },
   { key: "geesling", label: "Ask", title: "Ask Geesling", icon: null, tile: colors.sky },
   { key: "feedback", label: "Feedback", title: "Beta feedback", icon: "💬", tile: colors.paid },
-  { key: "account", label: "You", title: "About you", icon: "👤", tile: colors.paper },
 ];
 // Height of the menu, so sheets, cards and banners sit above it.
 const DOCK_HEIGHT = 76;
@@ -131,12 +128,13 @@ function Home() {
         ? { text: "Couldn’t find your location, so this is downtown Toronto.", retry: true }
         : null;
   const { saved } = useSaved();
-  const { signedUp } = useAccount();
 
   // The hatching intro plays over the map on every open; `entered` turns true once it has faded out.
   const [entered, setEntered] = useState(false);
   const [intro, setIntro] = useState(true);
   const [nudge, setNudge] = useState<string | null>(null);
+  // How Geesling's planning is going, for the opening screen's form while it waits.
+  const [planStatus, setPlanStatus] = useState<string | null>(null);
   // A question typed on the opening screen, sent to the chat once the map shows.
   const [pendingRequest, setPendingRequest] = useState<PlanRequest | null>(null);
   const asked = useRef(false);
@@ -411,7 +409,6 @@ function Home() {
             ) : null}
             {tab === "saved" ? <SavedPanel onSelect={(i) => selectItem(i)} onShowWalk={showWalk} /> : null}
             {tab === "feedback" ? <FeedbackPanel /> : null}
-            {tab === "account" ? <AccountPanel /> : null}
             <View style={[{ flex: 1 }, tab !== "geesling" && styles.hidden]}>
               <GeeslingPanel
                 origin={location}
@@ -423,8 +420,7 @@ function Home() {
                 onWalk={showWalk}
                 onSelectStop={(item, why) => selectItem(item, why)}
                 nudge={nudge}
-                signedIn={signedUp}
-                onJoin={() => setTab("account")}
+                onStatus={setPlanStatus}
               />
             </View>
           </View>
@@ -491,7 +487,7 @@ function Home() {
           onSkip={endTutorial}
         />
       ) : null}
-      {intro ? <HatchIntro nightMode={dark} now={now} onToggleTheme={toggleTheme} onReveal={revealApp} onDone={finishIntro} onAsk={askFromIntro} /> : null}
+      {intro ? <HatchIntro nightMode={dark} now={now} onToggleTheme={toggleTheme} onReveal={revealApp} onDone={finishIntro} onAsk={askFromIntro} planStatus={planStatus} /> : null}
       {teamBanner}
     </View>
   );
