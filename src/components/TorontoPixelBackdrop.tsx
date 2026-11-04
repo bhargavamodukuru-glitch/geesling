@@ -26,7 +26,7 @@ export function TorontoPixelBackdrop({ nightMode }: { nightMode: boolean }) {
     : { sky: "#F6E7C1", cloud: "#FFF8E6", buildingWindow: "#F6E7C1", tower: "#A97A4D", towerDeck: "#C8412F", park: "#759A50", grass: "#9BCB6B", water: "#8FD3F4", shimmer: "#D7F0F8" };
 
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: scene.sky }]}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: scene.sky, overflow: "hidden" }]}>
       {nightMode ? (
         <>
           <View style={[styles.moonHalo, { backgroundColor: "#E9D9A633" }]}>
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   sparkleVerticalSmall: { position: "absolute", width: 3, height: 16, backgroundColor: "#FFF8E6" },
   sparkleHorizontalSmall: { position: "absolute", width: 16, height: 3, backgroundColor: "#FFF8E6" },
   skyline: { position: "absolute", left: 0, right: 0, bottom: 38, height: 220, flexDirection: "row", alignItems: "flex-end" },
-  building: { position: "absolute", bottom: 0, flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", justifyContent: "space-evenly", paddingTop: 12, paddingHorizontal: 4, borderTopWidth: 5, borderTopColor: "#B08A5C" },
+  building: { position: "absolute", bottom: 0, flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", justifyContent: "space-evenly", paddingTop: 12, paddingHorizontal: 4, borderTopWidth: 5, borderTopColor: "#B08A5C", overflow: "hidden" },
   window: { width: 4, height: 7, margin: 3 },
   towerNeedle: { position: "absolute", left: "49.7%", bottom: 205, width: 4, height: 68 },
   towerTop: { position: "absolute", left: "48.7%", bottom: 204, width: "2.6%", minWidth: 18, height: 10 },

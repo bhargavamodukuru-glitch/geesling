@@ -1,6 +1,6 @@
 import { createAudioPlayer, type AudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from "react";
 import { AccessibilityInfo, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AboutYouForm } from "@/components/AboutYouForm";
@@ -11,26 +11,22 @@ import { useMotion } from "@/hooks/useMotion";
 import { Panel, PixelButton } from "@/components/Pixel";
 import { ClockChip } from "@/components/map/ClockChip";
 import { TorontoPixelBackdrop } from "@/components/TorontoPixelBackdrop";
+import { DEFAULT_PREFERENCES, SHORTCUT_VIBES, VIBES, buildPlanRequest, type LatLng, type PlanRequest, type Vibe } from "@/lib/planner";
+import { PlannerFlow } from "@/components/PlannerFlow";
 import { HALLOWEEN } from "@/lib/season";
 import { colors, fonts } from "@/lib/theme";
 
-// Opening screen: an egg rolls in over the skyline, cracks and hatches on its own; Geesling (the same Geesling as
-// everywhere else in the app) steps out, flies up over its egg and says hello; a moment after the hello finishes, its second
-// line comes on its own ("Skip" brings it straight away) with the text box (rotating examples) and "skip to the live map". Asking starts planning in the background and, for someone
-// who hasn't shared their details yet, shows the "about you" form while Geesling works; skipping shows it too. Then
-// the screen fades to black and back, video-game style, onto the map (and the answer). With Reduce Motion on,
-// Geesling is already hatched and hovering.
+// Opening screen: on open, an egg rolls in over the skyline, cracks and hatches on its own; Geesling (the same
+// Geesling as everywhere else in the app) steps out, then flies up into its place beside the chat, shrinking as it
+// goes, and its message bubble pops open ("I help you discover more of Toronto…") with quick replies (Date, Friends,
+// Solo, Try something new open the 3-step planner; Surprise me plans in one tap) and the person's own reply bubble to
+// type into (rotating examples), or "skip to the live map". A small "Skip intro" link jumps straight to Geesling in
+// its place with the chat open. Asking starts planning in the background and, for someone who hasn't shared their
+// details yet, shows the "about you" form while Geesling works; skipping shows it too. Then the screen fades to black
+// and back, video-game style, onto the map (and the answer). With Reduce Motion or the animations switch off, Geesling
+// is already in its place.
 
 type Stage = "egg" | "cracked" | "split" | "hatched";
-
-// What Geesling says, in order. The text box comes with the second line.
-const LINES = [
-  "Hi, welcome to Geesling, your one-stop shop for everything Toronto!",
-  "I help you see what’s going on in Toronto, whether you need help planning a date or have some time to kill. Simply tell me what you’re in the mood for and let me do the rest!",
-];
-const TYPE_MS = 28;
-// How long the hello stays up, once typed out, before the second line comes on its own.
-const HELLO_READ_MS = 2200;
 
 // Example requests that take turns in the empty text box.
 const EXAMPLES = [
@@ -43,11 +39,18 @@ const EXAMPLES = [
 ];
 const EXAMPLE_MS = 3000;
 
+const HELLO = "Hi, I’m Geesling! I help you discover more of Toronto. Tell me what you’re in the mood for or what your budget is.";
+// Geesling takes off for its place beside the chat at FLY_AT; the hello pops in when it lands.
+const FLY_AT = 5400;
+const FLY_MS = 1000;
+// Geesling's size in its place beside the chat (pixels per sprite pixel); the sprite is 14 × 16.
+const PERCH_PX = 3;
+const PERCH_W = 14 * PERCH_PX;
+const PERCH_H = 16 * PERCH_PX;
+
 const NATIVE_DRIVER = Platform.OS !== "web";
 // The egg sits on the grass, this far up from the bottom of the screen.
 const STAGE_BOTTOM = 44;
-// How many pixels Geesling hovers above its shell.
-const HOVER = 10;
 // The fade goes to black and back in hard steps, like an old console.
 const FADE_STEPS = 6;
 
@@ -111,23 +114,31 @@ interface Props {
   onReveal: () => void;
   /** The fade back from black has finished. */
   onDone: () => void;
-  /** They typed a question: the app starts planning it now and opens the chat with it once the map shows. */
-  onAsk: (prompt: string) => void;
+  /** They asked (typed, or picked a vibe): the app starts planning it now and opens the chat with it once the map shows. */
+  onAsk: (request: PlanRequest) => void;
+  /** For the planner's "Near me" and for Surprise me. */
+  userLocation: LatLng | null;
+  onLocate: () => Promise<LatLng | null>;
   /** Geesling's planning progress (the current step, then "ready" or "done"), shown on the form while it waits. */
   planStatus: string | null;
 }
 
-export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, onAsk, planStatus }: Props) {
-  const { width } = useWindowDimensions();
+export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, onAsk, userLocation, onLocate, planStatus }: Props) {
+  const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const px = width < 420 ? 7 : 9;
   const play = useSounds();
 
   const [stage, setStage] = useState<Stage>("egg");
-  // Which of Geesling's lines is showing (-1 = not talking yet), how much of it has typed out, and whether the
-  // "about you" form has taken over the card.
-  const [line, setLine] = useState(-1);
-  const [typed, setTyped] = useState(0);
+  // Whether Geesling has landed and its hello is up, whether a vibe's planner has taken the chat over, and whether
+  // the "about you" form has.
+  const [chat, setChat] = useState(false);
+  // Geesling heading for (or sitting in) its place beside the chat: "fly" animates there, "now" jumps there.
+  const [perch, setPerch] = useState<"none" | "fly" | "now">("none");
+  const slotRef = useRef<ComponentRef<typeof View>>(null);
+  const baseRef = useRef<ComponentRef<typeof View>>(null);
+  const [pop] = useState(() => new Animated.Value(0));
+  const [plannerVibe, setPlannerVibe] = useState<Vibe | null>(null);
   const [form, setForm] = useState<"asked" | "skipped" | null>(null);
   const { ready: accountReady, signedUp } = useAccount();
   const [pose, setPose] = useState<"sit" | "walk" | "fly">("sit");
@@ -150,6 +161,7 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
   const [wiggle] = useState(() => new Animated.Value(0));
   const [gooseX] = useState(() => new Animated.Value(0));
   const [gooseY] = useState(() => new Animated.Value(0));
+  const [gooseScale] = useState(() => new Animated.Value(1));
   const [capDrop] = useState(() => new Animated.Value(0));
   const [burst] = useState(() => new Animated.Value(0));
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -183,15 +195,12 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
     ]).start();
   }, [capDrop, gooseX, gooseY, px]);
 
-  // Up and over the egg, then hovering there, wings flapping, in one spot.
+  // Up out of the shell and into its place beside the chat (see the perch effect below).
   const flyUp = useCallback(() => {
     setPose("fly");
     buzz("tap");
-    Animated.parallel([
-      Animated.timing(gooseX, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: NATIVE_DRIVER }),
-      Animated.timing(gooseY, { toValue: -HOVER * px, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }),
-    ]).start();
-  }, [gooseX, gooseY, px]);
+    setPerch("fly");
+  }, []);
 
   // To black in steps, show the app, then back from black in steps.
   const fadeOut = useCallback(() => {
@@ -219,56 +228,112 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
 
   // The form only shows to someone who hasn't shared their details on this device.
   const needsForm = accountReady && !signedUp;
-  const ask = () => {
-    const value = prompt.trim();
-    if (!value || fading.current) return;
-    onAsk(value);
+  const send = (request: PlanRequest) => {
+    if (fading.current) return;
+    onAsk(request);
     if (needsForm) setForm("asked");
     else fadeOut();
   };
+  const ask = () => {
+    const value = prompt.trim();
+    if (value) send({ prompt: value });
+  };
+  // One tap: Geesling picks everything, starting near the person when their location is known.
+  const surprise = () => send(buildPlanRequest({ ...DEFAULT_PREFERENCES, vibe: "surprise", area: userLocation ? "near" : "explore" }, userLocation));
+  const pickVibe = (vibe: Vibe) => (vibe === "surprise" ? surprise() : setPlannerVibe(vibe));
   const skip = () => {
     if (fading.current) return;
     if (needsForm) setForm("skipped");
     else fadeOut();
   };
 
-  // Geesling's line types out a letter at a time (all at once with animations off).
+  // The hello pops in like a new message (no pop with animations off).
   useEffect(() => {
-    if (line < 0 || typed >= LINES[line].length) return;
+    if (!chat) return;
     if (!motion) {
-      const done = setTimeout(() => setTyped(LINES[line].length), 0);
-      return () => clearTimeout(done);
+      pop.setValue(1);
+      return;
     }
-    const timer = setTimeout(() => setTyped((n) => n + 1), TYPE_MS);
-    return () => clearTimeout(timer);
-  }, [line, typed, motion]);
-  const nextLine = useCallback(() => {
-    setLine(1);
-    setTyped(0);
-  }, []);
-  // Once the hello has typed out, the second line follows by itself after a moment to read it.
+    Animated.spring(pop, { toValue: 1, friction: 6, tension: 120, useNativeDriver: NATIVE_DRIVER }).start();
+  }, [chat, motion, pop]);
+  const popStyle = {
+    opacity: pop,
+    transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }, { translateY: pop.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+  };
+
+  // Geesling's place is an empty spot beside the bubble: measure it and the shell, and fly (or jump) there, shrinking
+  // to PERCH_PX. Re-run when the window changes size so it stays put. The hello pops in when it lands.
+  const flown = useRef(false);
   useEffect(() => {
-    if (line !== 0 || typed < LINES[0].length) return;
-    const timer = setTimeout(nextLine, HELLO_READ_MS);
-    return () => clearTimeout(timer);
-  }, [line, typed, nextLine]);
+    if (perch === "none" || stage !== "hatched") return;
+    let cancelled = false;
+    const frame = setTimeout(() => {
+      const slot = slotRef.current;
+      const base = baseRef.current;
+      if (!slot || !base) {
+        setChat(true);
+        return;
+      }
+      slot.measureInWindow((sx, sy, sw, sh) => {
+        base.measureInWindow((bx, by, _bw, bh) => {
+          if (cancelled) return;
+          const gooseW = 14 * px;
+          const gooseH = 16 * px;
+          // Centre to centre; the sprite scales about its own centre, so the move isn't scaled.
+          const dx = sx + sw / 2 - (bx + gooseW / 2);
+          const dy = sy + sh / 2 - (by + bh - 5 * px - gooseH / 2);
+          const scale = PERCH_PX / px;
+          if (perch === "fly" && !flown.current && motion) {
+            flown.current = true;
+            Animated.parallel([
+              Animated.timing(gooseX, { toValue: dx, duration: FLY_MS, easing: Easing.inOut(Easing.quad), useNativeDriver: NATIVE_DRIVER }),
+              Animated.timing(gooseY, { toValue: dy, duration: FLY_MS, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }),
+              Animated.timing(gooseScale, { toValue: scale, duration: FLY_MS, easing: Easing.inOut(Easing.quad), useNativeDriver: NATIVE_DRIVER }),
+            ]).start(() => setChat(true));
+          } else {
+            flown.current = true;
+            gooseX.setValue(dx);
+            gooseY.setValue(dy);
+            gooseScale.setValue(scale);
+            setChat(true);
+          }
+        });
+      });
+    }, 30);
+    return () => {
+      cancelled = true;
+      clearTimeout(frame);
+    };
+    // `height` matters too: the chat is centred on screen.
+  }, [perch, stage, width, height, px, motion, gooseX, gooseY, gooseScale]);
+
+  // "Skip intro": straight to the end of the scene, Geesling hovering over its shell, with the chat open.
+  const skipIntro = () => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    roll.setValue(1);
+    hatch(true);
+    setPose("fly");
+    setCapOff(true);
+    capDrop.setValue(1);
+    setPerch("now");
+  };
 
   // The egg rolls in (or, with Reduce Motion, Geesling is already up).
   useEffect(() => {
     let cancelled = false;
     void AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
       if (cancelled) return;
-      if (reduce) {
+      if (reduce || !motion) {
         roll.setValue(1);
         hatch(true);
         setPose("fly");
         setCapOff(true);
-        gooseY.setValue(-HOVER * px);
-        setLine(0);
-        setTyped(LINES[0].length);
+        capDrop.setValue(1);
+        setPerch("now");
         return;
       }
-      // Rolls in, wiggles, cracks twice and hatches on its own; then Geesling steps out, flies up and talks.
+      // Rolls in, wiggles, cracks twice and hatches on its own; Geesling steps out and flies up, and the chat opens.
       Animated.timing(roll, { toValue: 1, duration: 1300, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }).start();
       later(1300, () => buzz("tap"));
       later(1600, () => wiggleOnce(8, 70));
@@ -278,8 +343,7 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
       later(3300, () => wiggleOnce(16, 45));
       later(3700, () => hatch());
       later(4500, stepOut);
-      later(5400, flyUp);
-      later(6300, () => setLine(0));
+      later(FLY_AT, flyUp);
     });
     const pending = timers;
     return () => {
@@ -308,7 +372,7 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
               (shell 8 + hover + 16 tall, in pixels). The form is taller, so it gets the whole screen above the grass. */}
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={[styles.askArea, { top: insets.top + 50, bottom: form ? STAGE_BOTTOM + 12 : STAGE_BOTTOM + (8 + HOVER + 16) * px + 12 }]}
+            style={[styles.askArea, { top: insets.top + 50, bottom: form || plannerVibe ? STAGE_BOTTOM + 12 : STAGE_BOTTOM + 10 * px + 12 }]}
             pointerEvents="box-none"
           >
             {form ? (
@@ -336,60 +400,77 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
                   <AboutYouForm onSaved={fadeOut} secondary={{ label: "Skip for now", onPress: fadeOut }} />
                 </ScrollView>
               </Panel>
-            ) : line >= 0 ? (
-              <Panel style={styles.askCard} shadow={4}>
-                <Text style={styles.speaker}>GEESLING</Text>
-                <Text style={styles.line} accessibilityLiveRegion="polite">
-                  {LINES[line].slice(0, typed)}
-                  {/* Keeps the box its full size while the line types out. */}
-                  <Text style={styles.unseen}>{LINES[line].slice(typed)}</Text>
-                </Text>
-                {line === 0 ? (
-                  <View style={styles.askRow}>
-                    <View />
-                    <PixelButton label="Skip" tone="red" onPress={nextLine} />
-                  </View>
-                ) : (
-                  <>
-                    <TextInput
-                      value={prompt}
-                      onChangeText={setPrompt}
-                      placeholder={EXAMPLES[example]}
-                      onFocus={() => setFocused(true)}
-                      onBlur={() => setFocused(false)}
-                      placeholderTextColor={colors.inkSoft}
-                      style={styles.input}
-                      multiline
-                      maxLength={1200}
-                      accessibilityLabel="Tell Geesling what you're in the mood for"
-                      submitBehavior="submit"
-                      returnKeyType="send"
-                      onSubmitEditing={ask}
-                      onKeyPress={(event) => {
-                        const native = event.nativeEvent as { key: string; shiftKey?: boolean };
-                        if (Platform.OS === "web" && native.key === "Enter" && !native.shiftKey) {
-                          event.preventDefault();
-                          ask();
-                        }
-                      }}
-                    />
+            ) : plannerVibe ? (
+              <ScrollView style={styles.plannerScroll} contentContainerStyle={styles.plannerContent} keyboardShouldPersistTaps="handled">
+                <PlannerFlow initialVibe={plannerVibe} userLocation={userLocation} onLocate={onLocate} onSubmit={send} onCancel={() => setPlannerVibe(null)} />
+              </ScrollView>
+            ) : (
+              <ScrollView pointerEvents={chat ? "auto" : "none"} style={styles.threadScroll} contentContainerStyle={styles.thread} keyboardShouldPersistTaps="handled" accessibilityLabel="Chat with Geesling">
+                <View style={styles.geeslingRow}>
+                  {/* Geesling's place: it flies here from its shell. */}
+                  <View ref={slotRef} style={styles.slot} />
+                  <Animated.View style={[styles.bubble, styles.geeslingBubble, popStyle]}>
+                    <Text style={styles.speaker}>GEESLING</Text>
+                    <Text style={styles.line} accessibilityRole="header" accessibilityLiveRegion="polite">
+                      {chat ? HELLO : ""}
+                      {/* Holds the bubble at full size before it opens, so Geesling's place doesn't move. */}
+                      {chat ? null : <Text style={styles.unseen}>{HELLO}</Text>}
+                    </Text>
+                  </Animated.View>
+                </View>
+                <Animated.View style={[styles.replies, popStyle]}>
+                    {SHORTCUT_VIBES.map((id) => {
+                      const v = VIBES.find((x) => x.id === id);
+                      return v ? <PixelButton key={id} label={v.label} icon={v.icon} small tone={id === "surprise" ? "gold" : undefined} onPress={() => pickVibe(id)} /> : null;
+                    })}
+                  </Animated.View>
+                  <Animated.View style={[styles.userRow, popStyle]}>
+                    <View style={[styles.bubble, styles.userBubble]}>
+                      <TextInput
+                        value={prompt}
+                        onChangeText={setPrompt}
+                        placeholder={EXAMPLES[example]}
+                        onFocus={() => setFocused(true)}
+                        onBlur={() => setFocused(false)}
+                        placeholderTextColor={colors.wood}
+                        style={styles.input}
+                        multiline
+                        maxLength={1200}
+                        accessibilityLabel="Tell Geesling what you're in the mood for or your budget"
+                        submitBehavior="submit"
+                        returnKeyType="send"
+                        onSubmitEditing={ask}
+                        onKeyPress={(event) => {
+                          const native = event.nativeEvent as { key: string; shiftKey?: boolean };
+                          if (Platform.OS === "web" && native.key === "Enter" && !native.shiftKey) {
+                            event.preventDefault();
+                            ask();
+                          }
+                        }}
+                      />
+                    </View>
                     <View style={styles.askRow}>
-                      <Pressable onPress={skip} accessibilityRole="button" accessibilityLabel="Skip to the live map" hitSlop={8}>
+                      <Pressable onPress={skip} accessibilityRole="button" accessibilityLabel="Skip to the live map" hitSlop={8} style={styles.mapLinkPill}>
                         <Text style={styles.mapLink}>or skip to the live map →</Text>
                       </Pressable>
-                      <PixelButton label="Ask" tone="red" disabled={!prompt.trim()} onPress={ask} />
+                      <PixelButton label="Send" tone="red" disabled={!prompt.trim()} onPress={ask} />
                     </View>
-                  </>
-                )}
-              </Panel>
-            ) : null}
+                  </Animated.View>
+              </ScrollView>
+            )}
           </KeyboardAvoidingView>
 
           <View style={styles.stage} pointerEvents="box-none">
             {stage === "hatched" ? (
-              <View style={{ width: eggWidth, height: 8 * px }}>
+              <View ref={baseRef} style={{ width: eggWidth, height: 8 * px }}>
                 {/* Geesling sits 3 pixels down inside the bottom shell until it steps out. */}
-                <Animated.View style={[styles.goose, { bottom: 5 * px, zIndex: pose === "sit" ? 1 : 4, transform: [{ translateX: gooseX }, { translateY: gooseY }] }]}>
+                {/* Hidden while the planner or the form covers the chat (the planner shows its own Geesling). */}
+                <Animated.View
+                  style={[
+                    styles.goose,
+                    { bottom: 5 * px, zIndex: pose === "sit" ? 1 : 4, opacity: plannerVibe || form ? 0 : 1, transform: [{ translateX: gooseX }, { translateY: gooseY }, { scale: gooseScale }] },
+                  ]}
+                >
                   <Goose size={px} walking={pose === "walk"} flapping={pose === "fly"} />
                 </Animated.View>
                 <View style={{ position: "absolute", bottom: 0, zIndex: 2 }}>
@@ -440,6 +521,13 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
               : null}
           </View>
 
+          {/* Small, out of the way: for people who've seen the egg before. */}
+          {!chat && !revealed ? (
+            <Pressable onPress={skipIntro} style={[styles.skipIntro, { bottom: insets.bottom + 10 }]} accessibilityRole="button" accessibilityLabel="Skip intro" hitSlop={10}>
+              <Text style={[styles.skipIntroText, nightMode && styles.skipIntroNight]}>Skip intro →</Text>
+            </Pressable>
+          ) : null}
+
           {/* Toronto's date and time on the left, the day/night switch on the right. */}
           <View style={[styles.clockRow, { top: insets.top }]} pointerEvents="box-none">
             <ClockChip now={now} dark={nightMode} onToggle={onToggleTheme} />
@@ -463,16 +551,34 @@ const styles = StyleSheet.create({
   curtain: { backgroundColor: "#000000" },
   askArea: { position: "absolute", left: 16, right: 16, alignItems: "center", justifyContent: "center", zIndex: 5 },
   clockRow: { position: "absolute", left: 0, right: 0, height: 44, zIndex: 6 },
-  askCard: { width: "100%", maxWidth: 480, gap: 10, padding: 16, backgroundColor: colors.paper },
+  askCard: { width: "100%", maxWidth: 480, maxHeight: "100%", padding: 16, backgroundColor: colors.paper },
   speaker: { fontFamily: fonts.heading, fontSize: 13, color: colors.accent, letterSpacing: 1 },
   formCard: { maxHeight: "100%" },
-  line: { fontFamily: fonts.body, fontSize: 23, lineHeight: 25, color: colors.ink },
+  plannerScroll: { width: "100%", maxWidth: 520, maxHeight: "100%" },
+  plannerContent: { flexGrow: 1, justifyContent: "center", paddingVertical: 4 },
+  vibeLabel: { fontFamily: fonts.heading, fontSize: 13, color: colors.ink, letterSpacing: 1, marginTop: 2 },
+  vibes: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  skipIntro: { position: "absolute", right: 16, zIndex: 7 },
+  skipIntroText: { fontFamily: fonts.body, fontSize: 16, color: colors.inkSoft, textDecorationLine: "underline" },
+  skipIntroNight: { color: "#E8D6A7" },
+  threadScroll: { width: "100%", maxWidth: 480, maxHeight: "100%" },
+  thread: { flexGrow: 1, justifyContent: "center", gap: 10, paddingVertical: 4 },
+  geeslingRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
+  slot: { width: PERCH_W, height: PERCH_H },
   unseen: { opacity: 0 },
+  // Message bubbles: Geesling's on the left with its tail at the bottom left, the person's on the right.
+  bubble: { borderWidth: 3, borderColor: colors.ink, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
+  geeslingBubble: { flexShrink: 1, gap: 4, backgroundColor: colors.paper, borderBottomLeftRadius: 3 },
+  userRow: { gap: 8 },
+  userBubble: { alignSelf: "flex-end", width: "88%", backgroundColor: colors.gold, borderBottomRightRadius: 3, paddingVertical: 4, paddingHorizontal: 6 },
+  replies: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingLeft: PERCH_W + 8 },
+  mapLinkPill: { backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 8, paddingVertical: 4 },
+  line: { fontFamily: fonts.body, fontSize: 23, lineHeight: 25, color: colors.ink },
   progress: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.parchment, borderWidth: 2, borderColor: colors.ink, padding: 8 },
   progressDone: { backgroundColor: "#E2EFD0" },
   progressText: { flex: 1, fontFamily: fonts.body, fontSize: 19, lineHeight: 20, color: colors.ink },
-  input: { minHeight: 64, maxHeight: 140, backgroundColor: colors.white, borderWidth: 3, borderColor: colors.ink, paddingHorizontal: 10, paddingVertical: 8, fontFamily: fonts.body, fontSize: 21, color: colors.ink, textAlignVertical: "top" },
+  input: { minHeight: 60, maxHeight: 140, backgroundColor: "transparent", paddingHorizontal: 8, paddingVertical: 8, fontFamily: fonts.body, fontSize: 21, color: colors.ink, textAlignVertical: "top" },
   askRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  mapLink: { fontFamily: fonts.body, fontSize: 18, color: colors.inkSoft, textDecorationLine: "underline" },
+  mapLink: { fontFamily: fonts.body, fontSize: 17, color: colors.ink, textDecorationLine: "underline" },
   decor: { position: "absolute" },
 });

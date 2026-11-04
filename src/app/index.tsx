@@ -255,10 +255,10 @@ function Home() {
     void locate();
   }, [greet, locate]);
   const finishIntro = useCallback(() => setIntro(false), []);
-  const askFromIntro = useCallback((prompt: string) => {
+  const askFromIntro = useCallback((request: PlanRequest) => {
     asked.current = true;
     setTab("geesling");
-    setPendingRequest({ prompt });
+    setPendingRequest(request);
   }, []);
   const consumePrompt = useCallback(() => setPendingRequest(null), []);
   const endTutorial = useCallback(() => {
@@ -487,7 +487,7 @@ function Home() {
           onSkip={endTutorial}
         />
       ) : null}
-      {intro ? <HatchIntro nightMode={dark} now={now} onToggleTheme={toggleTheme} onReveal={revealApp} onDone={finishIntro} onAsk={askFromIntro} planStatus={planStatus} /> : null}
+      {intro ? <HatchIntro nightMode={dark} now={now} onToggleTheme={toggleTheme} onReveal={revealApp} onDone={finishIntro} onAsk={askFromIntro} userLocation={location} onLocate={locate} planStatus={planStatus} /> : null}
       {teamBanner}
     </View>
   );
