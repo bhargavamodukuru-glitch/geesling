@@ -774,11 +774,16 @@ async function handle(req: Request, meter: Meter, progress: (step: string) => vo
                 return stop.leg && stop.leg.duration_s > (newPart ? MAX_PART_CHANGE_TRAVEL_SECONDS : MAX_INTERSTOP_TRAVEL_SECONDS);
               });
               if (longHops.length) {
-                // Keep the part before the first long hop as a fallback; its intro may mention later stops, so it gets a plain one.
+                // Keep the part before the first long hop as a fallback; its intro and outro may mention later stops, so they get plain ones.
                 const cut = candidateStops.indexOf(longHops[0]);
                 if (cut >= 2 && (!fallback || cut > fallback.stops.length)) {
                   fallback = {
-                    walk: { ...walk, intro: "Honk! Here's what I could fit together without long trips between stops.", stops: walk.stops.slice(0, cut) },
+                    walk: {
+                      ...walk,
+                      intro: "Honk! Here's what I could fit together without long trips between stops.",
+                      outro: "Ask me again for more stops nearby, or tap Try another for a different mix.",
+                      stops: walk.stops.slice(0, cut),
+                    },
                     stops: candidateStops.slice(0, cut),
                   };
                 }
