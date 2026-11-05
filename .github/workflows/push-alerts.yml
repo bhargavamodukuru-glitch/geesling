@@ -4,9 +4,10 @@ name: Push alerts
 # has one run for daylight time (EDT, UTC-4) and one for standard time (EST, UTC-5); the function sends only when it's
 # the right Toronto hour, and at most once a day (supabase/functions/push-alerts).
 on:
-  schedule:
-    - cron: "30 12,13 * * *" # 8:30 am Toronto (EDT / EST)
-    - cron: "0 21,22 * * 1-5" # 5:00 pm Toronto (EDT / EST), weekdays
+  # Schedule off until push is live (see src/lib/push.ts PUSH_ENABLED). Re-enable both lines below to turn it on.
+  # schedule:
+  #   - cron: "30 12,13 * * *" # 8:30 am Toronto (EDT / EST)
+  #   - cron: "0 21,22 * * 1-5" # 5:00 pm Toronto (EDT / EST), weekdays
   workflow_dispatch: {}
 
 jobs:

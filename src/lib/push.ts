@@ -7,10 +7,14 @@ import { Platform } from "react-native";
 import { ensureSession, supabase } from "./supabase";
 
 const VAPID_PUBLIC_KEY = process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+// Off until the push backend (migration 20261105000000, push-alerts, its schedule) is live: no one should be asked to
+// allow notifications that never come. Turn on with EXPO_PUBLIC_PUSH_ENABLED=true in .env and redeploy the web app.
+const PUSH_ENABLED = process.env.EXPO_PUBLIC_PUSH_ENABLED === "true";
 
 /** Whether this browser can get Geesling's notifications. */
 export function pushSupported(): boolean {
   return (
+    PUSH_ENABLED &&
     Platform.OS === "web" &&
     typeof window !== "undefined" &&
     VAPID_PUBLIC_KEY.length > 0 &&
