@@ -45,6 +45,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "flex-start", gap: 6, maxWidth: 460, width: "100%", paddingTop: 8 },
   bubble: { flex: 1, gap: 4, padding: 10, backgroundColor: colors.paper },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  speaker: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.accent, letterSpacing: 1 },
+  speaker: { fontFamily: fonts.heading, fontSize: 12, color: colors.accent, letterSpacing: 1 },
   action: { alignSelf: "flex-start", marginTop: 4 },
 });

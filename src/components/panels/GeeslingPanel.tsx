@@ -305,7 +305,7 @@ export function GeeslingPanel({ origin, onLocate, freeOnly, initialRequest, onPr
 const styles = StyleSheet.create({
   hello: { flexDirection: "row", gap: 10, alignItems: "flex-end" },
   bubble: { flexShrink: 1, gap: 2, padding: 10 },
-  speaker: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.accent },
+  speaker: { fontFamily: fonts.heading, fontSize: 11, color: colors.accent },
   chipScroll: { flexGrow: 0, flexShrink: 0 },
   chips: { gap: 6, alignItems: "center", paddingVertical: 4 },
   choices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },

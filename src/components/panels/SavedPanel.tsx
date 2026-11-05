@@ -60,5 +60,5 @@ export function SavedPanel({ onSelect, onShowWalk }: Props) {
 const styles = StyleSheet.create({
   empty: { alignItems: "center", gap: 10, padding: 24 },
   row: { flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: colors.paper, borderWidth: 3, borderColor: colors.ink, padding: 8 },
-  title: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink },
+  title: { fontFamily: fonts.heading, fontSize: 14, color: colors.ink },
 });

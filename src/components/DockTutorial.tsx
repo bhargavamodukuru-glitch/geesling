@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   goose: { alignSelf: "flex-start", marginLeft: 8, marginBottom: -6, zIndex: 2 },
   card: { width: "100%", maxWidth: 440, gap: 6, padding: 14, backgroundColor: colors.paper },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  speaker: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.accent, letterSpacing: 1 },
+  speaker: { fontFamily: fonts.heading, fontSize: 12, color: colors.accent, letterSpacing: 1 },
   count: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
   title: { fontFamily: fonts.heading, fontSize: 18, color: colors.ink },
   buttons: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4 },

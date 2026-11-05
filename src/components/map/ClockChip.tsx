@@ -54,5 +54,5 @@ const styles = StyleSheet.create({
   clockDark: { color: "#FFF8E6" },
   toggle: { flexShrink: 0, minWidth: 32, minHeight: 28, alignItems: "center", justifyContent: "center" },
   switches: { flexDirection: "row", gap: 6 },
-  toggleText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.ink },
+  toggleText: { fontFamily: fonts.heading, fontSize: 12, color: colors.ink },
 });

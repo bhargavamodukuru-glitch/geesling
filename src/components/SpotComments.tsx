@@ -133,9 +133,9 @@ export function SpotComments({ item }: { item: MapItem }) {
 
 const styles = StyleSheet.create({
   wrap: { gap: 6, marginTop: 6, borderTopWidth: 2, borderColor: colors.ink, paddingTop: 8 },
-  heading: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.inkSoft },
+  heading: { fontFamily: fonts.heading, fontSize: 12, color: colors.inkSoft },
   comment: { backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, padding: 6, gap: 2 },
-  meta: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.wood },
+  meta: { fontFamily: fonts.heading, fontSize: 11, color: colors.wood },
   actions: { flexDirection: "row", justifyContent: "flex-end" },
   action: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, textDecorationLine: "underline" },
   composer: { gap: 6, marginTop: 4 },
