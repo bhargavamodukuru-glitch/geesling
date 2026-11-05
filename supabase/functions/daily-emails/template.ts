@@ -158,7 +158,7 @@ function sceneHtml(content: EmailContent, z: Sizes): string {
 
 function footerHtml(unsubscribeUrl: string): string {
   return `<tr><td align="center" style="padding:14px 20px 26px;font-family:${TEXT};font-size:17px;line-height:1.3;color:${C.inkSoft};">
-You're getting this because you ticked "Send me Geesling updates" on geesling.ca.<br>
+You're getting this because you ticked "Send me Geesling updates" on <a href="https://geesling.ca" style="color:${C.ink};text-decoration:underline;">geesling.ca</a>.<br>
 <a href="${escapeHtml(unsubscribeUrl)}" style="color:${C.ink};text-decoration:underline;">Unsubscribe from Geesling emails</a><br>
 Any questions or concerns? Email <a href="mailto:${CONTACT_EMAIL}" style="color:${C.ink};text-decoration:underline;">${CONTACT_EMAIL}</a>
 </td></tr>`;
@@ -206,18 +206,17 @@ ${sceneHtml(content, PICTURE_SIZES)}
 </html>`;
 }
 
-/** The email with the card as a picture (linked to the main button), real links and footer below it. */
+/**
+ * The email with the card as a picture, linked to the main button (the buttons are in the picture; the plain-text
+ * part and the alt text carry the links too), then the footer.
+ */
 export function renderPictureEmail(content: EmailContent, imageUrl: string, unsubscribeUrl: string): { html: string; text: string } {
-  const link = (href: string, text: string) => `<a href="${escapeHtml(href)}" style="color:${C.ink};text-decoration:underline;">${escapeHtml(text)}</a>`;
   const html = `${head(content.subject)}
 <body style="margin:0;padding:0;background:${C.sky};">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(content.preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.sky};"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:${EMAIL_WIDTH}px;">
 <tr><td><a href="${escapeHtml(content.cta.url)}" style="display:block;text-decoration:none;"><img src="${escapeHtml(imageUrl)}" width="${EMAIL_WIDTH}" alt="${escapeHtml(altText(content))}" style="display:block;width:100%;max-width:${EMAIL_WIDTH}px;height:auto;border:0;color:${C.ink};font-family:${TEXT};font-size:16px;"></a></td></tr>
-<tr><td align="center" style="padding:16px 20px 0;font-family:${TEXT};font-size:20px;line-height:1.4;color:${C.ink};">
-${link(content.cta.url, `${content.cta.label} →`)} &nbsp;·&nbsp; ${link(MAP_URL, "Open the live map")}
-</td></tr>
 ${footerHtml(unsubscribeUrl)}
 </table>
 </td></tr></table>
