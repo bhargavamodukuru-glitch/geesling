@@ -6,7 +6,10 @@
 //   4. asks the function to send, with the content and the picture's address
 // If any of 1–3 fails, it asks the function to send the all-text version, so a send is never missed. The function's
 // idempotency keys stop the same email from going out twice in a day either way.
-// Usage: node scripts/render-email.mjs [--kind=morning|neighbourhood|evening] [--test [--to=address]]   (test = owner, or --to)
+// --welcome: thank-you emails instead, for everyone who opted in and hasn't had one (grouped by sign-up time, one
+// picture per group).
+// Usage: node scripts/render-email.mjs [--welcome] [--kind=morning|neighbourhood|evening] [--test [--to=address]]
+//   (test = only to the owner, or to --to; marks nobody as thanked)
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 import { chromium } from "playwright";
 
@@ -14,9 +17,10 @@ const base = process.env.SUPABASE_URL?.replace(/\/$/, "");
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!base || !key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}`));
+const welcome = Boolean(arg("welcome"));
 const kind = arg("kind")?.split("=")[1];
 const to = arg("to")?.split("=")[1];
-const query = [kind ? `kind=${kind}` : "", arg("test") ? "test=1" : "", arg("test") && to ? `to=${encodeURIComponent(to)}` : ""].filter(Boolean).join("&");
+const query = [welcome ? "welcome=1" : "", kind ? `kind=${kind}` : "", arg("test") ? "test=1" : "", arg("test") && to ? `to=${encodeURIComponent(to)}` : ""].filter(Boolean).join("&");
 const auth = { Authorization: `Bearer ${key}`, apikey: key };
 const BUCKET = "email-art";
 
@@ -63,22 +67,43 @@ async function upload(png, name) {
   return `${base}/storage/v1/object/public/${BUCKET}/${name}`;
 }
 
+/** A picture of the page, uploaded; null (and logged) if anything fails, so the caller sends the text version. */
+async function pictureOf(page, name) {
+  try {
+    const png = await snapshot(page);
+    await ensureBucket();
+    // A new name each send, so inboxes that cache images never show an old card.
+    const url = await upload(png, `${name}-${Date.now()}.png`);
+    console.log("picture:", url, `${Math.round(png.length / 1024)} KB`);
+    return url;
+  } catch (e) {
+    console.error("picture failed, sending the text version:", e.message);
+    return null;
+  }
+}
+
+if (welcome) {
+  const due = await fn("page=1");
+  if (due.skipped) {
+    console.log("nothing to send:", due.skipped);
+    process.exit(0);
+  }
+  let failed = false;
+  for (const g of due.groups) {
+    const picture = await pictureOf(g.page, `welcome-${g.kind}`);
+    const r = await fn("", picture ? { content: g.content, picture, owners: g.owners } : { owners: g.owners });
+    console.log(JSON.stringify({ welcome: true, kind: g.kind, people: g.owners.length, test: r.test, picture: r.picture, sent: r.sent, failures: r.failures }));
+    if (r.failures?.length) failed = true;
+  }
+  process.exit(failed ? 1 : 0);
+}
+
 const due = await fn("page=1");
 if (due.skipped) {
   console.log("nothing to send:", due.skipped);
   process.exit(0);
 }
-let result;
-try {
-  const png = await snapshot(due.page);
-  await ensureBucket();
-  // A new name each send, so inboxes that cache images never show an old card.
-  const picture = await upload(png, `${due.day}-${due.kind}-${Date.now()}.png`);
-  console.log("picture:", picture, `${Math.round(png.length / 1024)} KB`);
-  result = await fn(`kind=${due.kind}`, { content: due.content, picture });
-} catch (e) {
-  console.error("picture failed, sending the text version:", e.message);
-  result = await fn(`kind=${due.kind}`);
-}
+const picture = await pictureOf(due.page, `${due.day}-${due.kind}`);
+const result = await fn(`kind=${due.kind}`, picture ? { content: due.content, picture } : {});
 console.log(JSON.stringify({ kind: result.kind, day: result.day, test: result.test, picture: result.picture, subject: result.subject, recipients: result.recipients, sent: result.sent, failures: result.failures }));
 if (result.failures?.length) process.exitCode = 1;

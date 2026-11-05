@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { composeEvening, composeMorning, composeNeighbourhood, dueEmail, inToronto, pickFreeEvents, spendRange, whenLabel, NEIGHBOURHOODS, type EventRow, type PlaceRow } from "../supabase/functions/daily-emails/picks.ts";
+import { composeEvening, composeMorning, composeNeighbourhood, composeWelcome, dueEmail, welcomeKind, inToronto, pickFreeEvents, spendRange, whenLabel, NEIGHBOURHOODS, type EventRow, type PlaceRow } from "../supabase/functions/daily-emails/picks.ts";
 import { escapeHtml, renderEmail } from "../supabase/functions/daily-emails/template.ts";
 
 const now = new Date("2026-11-05T14:00:00Z"); // 9 am Toronto
@@ -108,4 +108,25 @@ test("which email is due: 9–10 am, noon–1 pm, 5–6 pm Toronto", () => {
   assert.equal(dueEmail(18), "evening");
   assert.equal(dueEmail(8), null);
   assert.equal(dueEmail(20), null);
+});
+
+test("thank-you recommendations follow the sign-up hour", () => {
+  assert.equal(welcomeKind(8), "morning");
+  assert.equal(welcomeKind(11), "neighbourhood");
+  assert.equal(welcomeKind(15), "neighbourhood");
+  assert.equal(welcomeKind(16), "evening");
+  assert.equal(welcomeKind(20), "evening");
+  assert.equal(welcomeKind(23), "morning");
+  assert.equal(welcomeKind(2), "morning");
+});
+
+test("a thank-you keeps the recommendations and puts the thanks on top", () => {
+  const base = composeEvening({ dateLabel: "Thu, Nov 5 · 5 PM", areaName: "downtown", bites: [place("Big Pita")], dinner: [], coffee: [] });
+  const w = composeWelcome(base, "evening", "Thu, Nov 5");
+  assert.equal(w.subject, "🪿 Thanks for joining Geesling!");
+  assert.equal(w.hero?.title, "Thanks for joining Geesling!");
+  assert.match(w.hero?.subtitle ?? "", /9 am, noon and 5 pm/);
+  assert.equal(w.dateLabel, "Thu, Nov 5 · WELCOME");
+  assert.deepEqual(w.sections, base.sections);
+  assert.equal(w.cta.url, base.cta.url);
 });

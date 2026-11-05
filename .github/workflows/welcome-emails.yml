@@ -1,0 +1,59 @@
+name: Welcome emails
+
+# A thank-you email for everyone who ticks "Send me Geesling updates" on the form, with recommendations for the time
+# they signed up (morning picks, a neighbourhood day, or grab-and-go food), in the same picture design as the daily
+# emails. Every 10 minutes a quick check asks whether anyone is waiting; only then does a browser start
+# (scripts/render-email.mjs --welcome). profiles.welcome_sent_at and per-person idempotency keys mean nobody gets two.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "Test only: which recommendations (morning, neighbourhood or evening)"
+        required: false
+      test:
+        description: "Send one test thank-you to the owner (true/false); marks nobody"
+        required: false
+        default: "false"
+      to:
+        description: "With test: send it to this address instead of the owner"
+        required: false
+
+jobs:
+  send:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check for new sign-ups
+        id: check
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.test }}" = "true" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          r=$(curl -sS -X POST "$SUPABASE_URL/functions/v1/daily-emails?welcome=1&check=1" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" -d '{}')
+          echo "$r"
+          if echo "$r" | grep -q '"pending":[1-9]'; then echo "go=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.go == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.go == 'true'
+        with:
+          node-version: 24
+      - name: Install headless Chrome
+        if: steps.check.outputs.go == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/render" && cp scripts/render-email.mjs "$RUNNER_TEMP/render/"
+          cd "$RUNNER_TEMP/render" && npm init -y >/dev/null && npm install --no-audit --no-fund playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Send thank-yous
+        if: steps.check.outputs.go == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          KIND: ${{ github.event.inputs.kind }}
+          TEST: ${{ github.event.inputs.test }}
+          TO: ${{ github.event.inputs.to }}
+        run: |
+          node "$RUNNER_TEMP/render/render-email.mjs" --welcome ${KIND:+--kind=$KIND} $([ "$TEST" = "true" ] && echo --test ${TO:+--to=$TO})

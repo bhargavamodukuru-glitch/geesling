@@ -261,6 +261,36 @@ export function dueEmail(hour: number): EmailKind | null {
   return null;
 }
 
+/**
+ * What a thank-you email recommends, from the Toronto hour someone signed up: the morning's free picks until 11, a
+ * neighbourhood day until 4, grab-and-go food until 9 pm, then whatever free is still on (the morning email's picks).
+ */
+export function welcomeKind(hour: number): EmailKind {
+  if (hour >= 6 && hour < 11) return "morning";
+  if (hour >= 11 && hour < 16) return "neighbourhood";
+  if (hour >= 16 && hour < 21) return "evening";
+  return "morning";
+}
+
+/** Wraps a daily email's recommendations in the thank-you: same design, a thank-you banner and subject on top. */
+export function composeWelcome(base: EmailContent, kind: EmailKind, dateText: string): EmailContent {
+  const lead: Record<EmailKind, string> = {
+    morning: "Here's what's on today that won't cost you a thing:",
+    neighbourhood: base.hero ? `Here's an idea for today: ${base.hero.title.replace(/^A day/, "a day")}, under $20.` : "Here's an idea for today:",
+    evening: "Hungry? Here's where to grab something good tonight, all under $20:",
+  };
+  return {
+    ...base,
+    dateLabel: `${dateText} · WELCOME`,
+    subject: "🪿 Thanks for joining Geesling!",
+    preheader: `You'll hear from me at 9 am, noon and 5 pm. ${base.preheader}`,
+    hero: { title: "Thanks for joining Geesling!", subtitle: "Honk! You'll hear from me at 9 am, noon and 5 pm with free and cheap things to do in Toronto." },
+    intro: lead[kind],
+    // The 5 pm email says "open as of 5 pm"; a thank-you can go out at any hour.
+    attribution: base.attribution?.replace("open as of 5 pm", "open when this was sent"),
+  };
+}
+
 /** Days since 1970 in Toronto: drives the rotations, so each day gets the next neighbourhood and part of town. */
 export function dayNumber(isoDay: string): number {
   return Math.floor(Date.parse(`${isoDay}T12:00:00Z`) / 86_400_000);

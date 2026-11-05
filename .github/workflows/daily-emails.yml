@@ -1,16 +1,17 @@
 name: Daily emails
 
 # Geesling's three daily emails, Toronto time: 9 am (what's on today), noon (a neighbourhood day under $20) and
-# 5 pm (grab-and-go food under $20). GitHub schedules run in UTC, so each email has a run for daylight time (EDT,
-# UTC-4) and one for standard time (EST, UTC-5); the function only sends in the right Toronto hour, and its
-# idempotency keys stop a second run from sending again (supabase/functions/daily-emails).
+# 5 pm (grab-and-go food under $20). GitHub schedules run in UTC, so each email has runs for daylight time (EDT,
+# UTC-4) and standard time (EST, UTC-5), and GitHub sometimes drops scheduled runs, so there are backups every 20
+# minutes through each window. The first one sends; the function records it (public.email_sends) and later runs stop
+# at the quick check below, before any browser starts (supabase/functions/daily-emails).
 # scripts/render-email.mjs photographs the card in headless Chrome so inboxes show Geesling's real pixel fonts; if
 # that fails it sends the all-text version.
 on:
   schedule:
-    - cron: "0 13,14 * * *" # 9 am Toronto
-    - cron: "0 16,17 * * *" # noon Toronto
-    - cron: "0 21,22 * * *" # 5 pm Toronto
+    - cron: "0,20,40 13,14 * * *" # 9 am Toronto, with backups
+    - cron: "0,20,40 16,17 * * *" # noon Toronto, with backups
+    - cron: "0,20,40 21,22 * * *" # 5 pm Toronto, with backups
   workflow_dispatch:
     inputs:
       kind:
@@ -30,17 +31,32 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      # Seconds, no browser: is an email due that hasn't gone out today? (Manual runs always go ahead.)
+      - name: Check
+        id: check
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          r=$(curl -sS -X POST "$SUPABASE_URL/functions/v1/daily-emails?check=1" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" -d '{}')
+          echo "$r"
+          if echo "$r" | grep -q '"due"'; then echo "go=true" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/checkout@v4
+        if: steps.check.outputs.go == 'true'
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.go == 'true'
         with:
           node-version: 24
       # Playwright in its own folder (not the app's ~800 packages); the script runs from there so it finds it.
       - name: Install headless Chrome
+        if: steps.check.outputs.go == 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/render" && cp scripts/render-email.mjs "$RUNNER_TEMP/render/"
           cd "$RUNNER_TEMP/render" && npm init -y >/dev/null && npm install --no-audit --no-fund playwright@1.55.1
           npx playwright install --with-deps chromium
       - name: Send the email that's due
+        if: steps.check.outputs.go == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
