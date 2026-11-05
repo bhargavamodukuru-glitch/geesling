@@ -49,6 +49,8 @@ const TEST_TO = Deno.env.get("EMAIL_TEST_TO") ?? CONTACT_EMAIL;
 const FROM = "Geesling <hello@news.geesling.ca>";
 const BUDGET = 20;
 
+const db = () => createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 function isServiceRole(request: Request): boolean {
@@ -156,11 +158,10 @@ async function spotsIn(db: Db, area: Area, month: number): Promise<SpotRow[]> {
 
 async function buildContent(kind: EmailKind, now: Date): Promise<EmailContent> {
   const t = toronto(now);
-  const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
   const label = (h: string) => `${t.dateText} · ${h}`;
 
   if (kind === "morning") {
-    const free = (await eventsOnToday(db, now, t.midnight, { freeOnly: true })).filter((e) => inToronto(e) && sessionIn(e, now, t.midnight));
+    const free = (await eventsOnToday(db(), now, t.midnight, { freeOnly: true })).filter((e) => inToronto(e) && sessionIn(e, now, t.midnight));
     const picks = pickFreeEvents(free, now, t.midnight, t.month);
     return composeMorning({ dateLabel: label("9 AM"), freeCount: free.length, picks, now });
   }
@@ -196,7 +197,7 @@ async function buildContent(kind: EmailKind, now: Date): Promise<EmailContent> {
   let chosen: Area | null = null;
   for (let i = 0; i < NEIGHBOURHOODS.length && !chosen; i++) {
     const a = NEIGHBOURHOODS[(dayNumber(t.day) + i) % NEIGHBOURHOODS.length];
-    const [spots, events] = await Promise.all([spotsIn(db, a, t.month), eventsOnToday(db, now, t.midnight, { area: a })]);
+    const [spots, events] = await Promise.all([spotsIn(db(), a, t.month), eventsOnToday(db(), now, t.midnight, { area: a })]);
     spotCache.set(a.name, spots);
     eventCache.set(a.name, events.filter((e) => inArea(a, e.lat, e.lng) && inToronto(e)));
     if (eventCache.get(a.name)!.filter((e) => e.is_free).length + spots.length >= 2) chosen = a;
@@ -232,8 +233,7 @@ async function buildContent(kind: EmailKind, now: Date): Promise<EmailContent> {
 /** Test sends go to EMAIL_TEST_TO, or to one address given with ?to= (service role only, like every call here). */
 async function recipients(test: boolean, to: string | null): Promise<Array<{ owner: string; email: string }>> {
   if (test) return [{ owner: "test", email: to && /^[^\s@,;<>]+@[^\s@,;<>]+\.[a-z]{2,}$/i.test(to) ? to : TEST_TO }];
-  const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
-  const { data, error } = await db.from("profiles").select("owner,email").eq("marketing_opt_in", true);
+  const { data, error } = await db().from("profiles").select("owner,email").eq("marketing_opt_in", true);
   if (error) throw new Error(error.message);
   return (data ?? []).filter((r) => typeof r.email === "string" && r.email.includes("@")) as Array<{ owner: string; email: string }>;
 }
@@ -274,8 +274,6 @@ async function send(content: EmailContent, list: Array<{ owner: string; email: s
   }
   return { sent, failures };
 }
-
-const db = () => createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
 async function alreadySent(kind: EmailKind, day: string): Promise<boolean> {
   const { data, error } = await db().from("email_sends").select("kind").eq("kind", kind).eq("day", day).maybeSingle();

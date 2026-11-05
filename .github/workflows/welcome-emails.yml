@@ -20,6 +20,10 @@ on:
         description: "With test: send it to this address instead of the owner"
         required: false
 
+# Read-only token: these jobs only read the repo; they talk to Supabase with their own secrets.
+permissions:
+  contents: read
+
 jobs:
   send:
     runs-on: ubuntu-24.04
@@ -30,8 +34,9 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TEST: ${{ github.event.inputs.test }}
         run: |
-          if [ "${{ github.event.inputs.test }}" = "true" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$TEST" = "true" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           r=$(curl -sS -X POST "$SUPABASE_URL/functions/v1/daily-emails?welcome=1&check=1" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" -d '{}')
           echo "$r"
           if echo "$r" | grep -q '"pending":[1-9]'; then echo "go=true" >> "$GITHUB_OUTPUT"; fi

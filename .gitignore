@@ -50,3 +50,6 @@ city-spots-preview.json
 
 # GitHub token for supabase/functions/email-dispatch (Actions only, this repo); copied into Supabase secrets
 .env.github-dispatch
+
+# Supabase CLI cache (project ref, pooler address, versions): local only
+supabase/.temp/

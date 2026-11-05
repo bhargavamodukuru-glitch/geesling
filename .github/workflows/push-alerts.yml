@@ -10,6 +10,10 @@ on:
   #   - cron: "0 21,22 * * 1-5" # 5:00 pm Toronto (EDT / EST), weekdays
   workflow_dispatch: {}
 
+# Read-only token: these jobs only read the repo; they talk to Supabase with their own secrets.
+permissions:
+  contents: read
+
 jobs:
   send:
     runs-on: ubuntu-latest
