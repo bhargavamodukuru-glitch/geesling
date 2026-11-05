@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   missing: { backgroundColor: colors.grass, alignItems: "center", justifyContent: "center", padding: 16 },
   missingPanel: { maxWidth: 360, alignItems: "center", gap: 8 },
   chip: { backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 5, paddingVertical: 1 },
-  chipText: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.white },
+  chipText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 16, color: colors.white },
   chipAlight: { backgroundColor: colors.paper },
   chipAlightText: { color: colors.accent },
   me: { width: 16, height: 16, backgroundColor: "#2F80ED", borderWidth: 3, borderColor: colors.white },

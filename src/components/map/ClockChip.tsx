@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
   row: { position: "absolute", top: 8, left: 10, right: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   chip: { backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 1 },
   chipDark: { backgroundColor: "#34435D", borderColor: "#D8C59A" },
-  clock: { fontFamily: fonts.body, fontSize: 13, color: colors.wood, letterSpacing: 0.3 },
+  clock: { fontFamily: fonts.body, fontSize: 16, color: colors.wood, letterSpacing: 0.3 },
   clockDark: { color: "#FFF8E6" },
   toggle: { flexShrink: 0, minWidth: 32, minHeight: 28, alignItems: "center", justifyContent: "center" },
   switches: { flexDirection: "row", gap: 6 },

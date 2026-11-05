@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   walkBannerText: { flex: 1, fontFamily: fonts.heading, fontSize: 14, color: colors.ink },
-  noteText: { flex: 1, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.ink },
+  noteText: { flex: 1, fontFamily: fonts.body, fontSize: 17, lineHeight: 18, color: colors.ink },
   sheetArea: { position: "absolute", zIndex: 8 },
   sheet: { flex: 1, backgroundColor: colors.parchment, borderTopWidth: 3, borderColor: colors.ink, borderTopLeftRadius: 18, borderTopRightRadius: 18, overflow: "hidden" },
   sheetWide: { borderWidth: 3, borderRadius: 18 },

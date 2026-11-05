@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   card: { width: "100%", maxWidth: 440, gap: 6, padding: 14, backgroundColor: colors.paper },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   speaker: { fontFamily: fonts.heading, fontSize: 12, color: colors.accent, letterSpacing: 1 },
-  count: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
+  count: { fontFamily: fonts.body, fontSize: 16, color: colors.inkSoft },
   title: { fontFamily: fonts.heading, fontSize: 18, color: colors.ink },
   buttons: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4 },
   // A square turned 45° under the box, pointing down at the tile.

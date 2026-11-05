@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   card: { gap: 8 },
   label: { fontFamily: fonts.heading, fontSize: 11, color: colors.inkSoft, marginTop: 4 },
   ratings: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  input: { backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 10, paddingVertical: 8, fontFamily: fonts.body, fontSize: 14, color: colors.ink },
+  input: { backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 10, paddingVertical: 8, fontFamily: fonts.body, fontSize: 18, color: colors.ink },
   message: { minHeight: 110, textAlignVertical: "top" },
   error: { color: colors.accent },
   center: { textAlign: "center" },

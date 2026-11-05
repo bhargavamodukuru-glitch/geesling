@@ -171,7 +171,7 @@ function Check({ checked, label, onToggle }: { checked: boolean; label: string; 
 const styles = StyleSheet.create({
   form: { gap: 10 },
   label: { fontFamily: fonts.heading, fontSize: 13, color: colors.ink },
-  input: { borderWidth: 3, borderColor: colors.ink, backgroundColor: colors.white, paddingHorizontal: 10, paddingVertical: 8, fontFamily: fonts.body, fontSize: 16, color: colors.ink },
+  input: { borderWidth: 3, borderColor: colors.ink, backgroundColor: colors.white, paddingHorizontal: 10, paddingVertical: 8, fontFamily: fonts.body, fontSize: 21, color: colors.ink },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   select: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 3, borderColor: colors.ink, backgroundColor: colors.white, paddingHorizontal: 10, paddingVertical: 8, minHeight: 44 },
   caret: { fontFamily: fonts.heading, fontSize: 13, color: colors.ink },
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   box: { width: 24, height: 24, borderWidth: 3, borderColor: colors.ink, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
   boxOn: { backgroundColor: colors.freeDark },
   tick: { color: colors.white, fontFamily: fonts.heading, fontSize: 14, lineHeight: 16 },
-  error: { fontFamily: fonts.body, fontSize: 14, color: colors.accent },
+  error: { fontFamily: fonts.body, fontSize: 18, color: colors.accent },
   mailLink: { color: colors.ink, textDecorationLine: "underline" },
   actions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
 });

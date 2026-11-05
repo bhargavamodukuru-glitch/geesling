@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   noteLabel: { fontFamily: fonts.heading, fontSize: 11, color: colors.accent },
   rsvp: { backgroundColor: "#FBE3DF", borderWidth: 2, borderColor: colors.accent, padding: 8, gap: 2 },
   rsvpTitle: { fontFamily: fonts.heading, fontSize: 13, color: colors.accent },
-  source: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
+  source: { fontFamily: fonts.body, fontSize: 16, color: colors.inkSoft },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   socialButton: {
     width: 40,
