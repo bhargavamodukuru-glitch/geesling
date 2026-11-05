@@ -43,7 +43,9 @@ async function ensureBucket() {
 }
 
 async function snapshot(html) {
-  const browser = await chromium.launch();
+  // PW_CHANNEL=chrome uses the Google Chrome GitHub's runners already have (no browser download or system packages,
+  // which once stalled long enough to time a run out); without it, Playwright's own Chromium.
+  const browser = await chromium.launch(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {});
   try {
     const page = await browser.newPage({ viewport: { width: 600, height: 900 }, deviceScaleFactor: 2 });
     await page.setContent(html, { waitUntil: "networkidle", timeout: 45_000 });

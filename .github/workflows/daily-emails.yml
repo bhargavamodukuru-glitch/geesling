@@ -49,12 +49,13 @@ jobs:
         with:
           node-version: 24
       # Playwright in its own folder (not the app's ~800 packages); the script runs from there so it finds it.
-      - name: Install headless Chrome
+      - name: Install Playwright
         if: steps.check.outputs.go == 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/render" && cp scripts/render-email.mjs "$RUNNER_TEMP/render/"
           cd "$RUNNER_TEMP/render" && npm init -y >/dev/null && npm install --no-audit --no-fund playwright@1.55.1
-          npx playwright install --with-deps chromium
+          # The runner's own Google Chrome is used (PW_CHANNEL below), so no browser download or system packages.
+          google-chrome --version
       - name: Send the email that's due
         if: steps.check.outputs.go == 'true'
         env:
@@ -63,5 +64,6 @@ jobs:
           KIND: ${{ github.event.inputs.kind }}
           TEST: ${{ github.event.inputs.test }}
           TO: ${{ github.event.inputs.to }}
+          PW_CHANNEL: chrome
         run: |
           node "$RUNNER_TEMP/render/render-email.mjs" ${KIND:+--kind=$KIND} $([ "$TEST" = "true" ] && echo --test ${TO:+--to=$TO})
