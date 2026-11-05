@@ -20,6 +20,9 @@ on:
         description: "Send only to the owner (true/false)"
         required: false
         default: "false"
+      to:
+        description: "With test: send the test to this address instead of the owner"
+        required: false
 
 jobs:
   send:
@@ -43,5 +46,6 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           KIND: ${{ github.event.inputs.kind }}
           TEST: ${{ github.event.inputs.test }}
+          TO: ${{ github.event.inputs.to }}
         run: |
-          node "$RUNNER_TEMP/render/render-email.mjs" ${KIND:+--kind=$KIND} $([ "$TEST" = "true" ] && echo --test)
+          node "$RUNNER_TEMP/render/render-email.mjs" ${KIND:+--kind=$KIND} $([ "$TEST" = "true" ] && echo --test ${TO:+--to=$TO})

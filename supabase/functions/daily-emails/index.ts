@@ -227,8 +227,9 @@ async function buildContent(kind: EmailKind, now: Date): Promise<EmailContent> {
   });
 }
 
-async function recipients(test: boolean): Promise<Array<{ owner: string; email: string }>> {
-  if (test) return [{ owner: "test", email: TEST_TO }];
+/** Test sends go to EMAIL_TEST_TO, or to one address given with ?to= (service role only, like every call here). */
+async function recipients(test: boolean, to: string | null): Promise<Array<{ owner: string; email: string }>> {
+  if (test) return [{ owner: "test", email: to && /^[^\s@,;<>]+@[^\s@,;<>]+\.[a-z]{2,}$/i.test(to) ? to : TEST_TO }];
   const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
   const { data, error } = await db.from("profiles").select("owner,email").eq("marketing_opt_in", true);
   if (error) throw new Error(error.message);
@@ -297,7 +298,7 @@ Deno.serve(async (request) => {
       const { html, text } = picture ? renderPictureEmail(content, picture, await unsubscribeUrl("test")) : renderEmail(content, await unsubscribeUrl("test"));
       return json({ dry: true, kind, subject: content.subject, preheader: content.preheader, text, html });
     }
-    const list = await recipients(test);
+    const list = await recipients(test, params.get("to"));
     const result = await send(content, list, test ? `test-${kind}-${Date.now()}` : `${kind}-${t.day}`, picture);
     console.log("daily email", { kind, day: t.day, test, picture: Boolean(picture), recipients: list.length, ...result });
     return json({ kind, day: t.day, test, picture: Boolean(picture), subject: content.subject, recipients: list.length, ...result });

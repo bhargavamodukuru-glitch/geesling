@@ -6,7 +6,7 @@
 //   4. asks the function to send, with the content and the picture's address
 // If any of 1–3 fails, it asks the function to send the all-text version, so a send is never missed. The function's
 // idempotency keys stop the same email from going out twice in a day either way.
-// Usage: node scripts/render-email.mjs [--kind=morning|neighbourhood|evening] [--test]   (test = owner only)
+// Usage: node scripts/render-email.mjs [--kind=morning|neighbourhood|evening] [--test [--to=address]]   (test = owner, or --to)
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 import { chromium } from "playwright";
 
@@ -15,7 +15,8 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!base || !key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}`));
 const kind = arg("kind")?.split("=")[1];
-const query = [kind ? `kind=${kind}` : "", arg("test") ? "test=1" : ""].filter(Boolean).join("&");
+const to = arg("to")?.split("=")[1];
+const query = [kind ? `kind=${kind}` : "", arg("test") ? "test=1" : "", arg("test") && to ? `to=${encodeURIComponent(to)}` : ""].filter(Boolean).join("&");
 const auth = { Authorization: `Bearer ${key}`, apikey: key };
 const BUCKET = "email-art";
 
