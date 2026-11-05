@@ -47,3 +47,6 @@ city-spots-preview.json
 
 # Resend setup key (full access, for the one-time agent setup only; delete after)
 .env.resend-agent
+
+# GitHub token for supabase/functions/email-dispatch (Actions only, this repo); copied into Supabase secrets
+.env.github-dispatch

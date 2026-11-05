@@ -32,3 +32,7 @@ verify_jwt = true
 [functions.email-unsubscribe]
 # Opened from links in emails, without a Supabase login; every link carries its own HMAC signature.
 verify_jwt = false
+
+[functions.email-dispatch]
+# Called by a database trigger and pg_cron without a login; it only starts a GitHub run when there is real work.
+verify_jwt = false
