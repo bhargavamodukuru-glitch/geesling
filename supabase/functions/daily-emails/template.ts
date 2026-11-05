@@ -1,9 +1,13 @@
 // Geesling's daily emails as HTML + plain text. Pure (tests/dailyEmails.test.ts).
-// Accessibility (WCAG 2.2 AA, as far as email allows): real text (no text in images), lang="en", layout tables marked
-// role="presentation", a 16px reading size with 1.5 line height, colours measured at 4.5:1 or better, link text that
-// says where it goes, a meaningful alt on the only image, nothing conveyed by colour alone (tags carry words), and a
-// plain-text part for clients and readers that prefer it. Look: Geesling's pixel style (chunky borders, hard shadows,
-// parchment and ink), with Pixelify Sans on headings and VT323 for text (the fonts geesling.ca uses), sized up since VT323 runs small.
+// Look: the same as geesling.ca's "about you" form. Geesling's sky (sun, clouds) above a paper card with a chunky ink
+// border and hard shadow, the skyline (CN Tower, trees, grass, lake, the goose) below. Inside the card: the red
+// GEESLING label, Pixelify Sans field labels, each suggestion in a white box like the form's inputs, small VT323
+// print, and a red Save-style button beside a paper one. The scene is two images on geesling.ca (public/email), drawn
+// from the app's own backdrop; everything with words is real text. Fonts: VT323 for text, Pixelify Sans for labels
+// (Google Fonts; clients that block web fonts fall back to monospace).
+// Accessibility (WCAG 2.2 AA, as far as email allows): lang="en", layout tables marked role="presentation", decorative
+// scene images with empty alt, colours at 4.5:1 or better, link text that says where it goes, nothing conveyed by
+// colour alone, and a plain-text part for clients and readers that prefer it.
 
 export type TagTone = "free" | "price" | "extra";
 
@@ -37,59 +41,64 @@ export interface EmailContent {
   outro: string;
 }
 
+// The form's colours (src/lib/theme.ts).
 const C = {
   ink: "#3B2412",
   inkSoft: "#6B4A2E",
-  parchment: "#F6E7C1",
-  parchmentDark: "#EAD3A0",
+  sky: "#F6E7C1",
   paper: "#FFF8E6",
+  white: "#FFFFFF",
   red: "#C8412F",
-  gold: "#F2C14E",
   green: "#3D7A26",
 };
-const BODY_FONT = "'VT323', 'Courier New', monospace";
-const PIXEL_FONT = "'Pixelify Sans', 'Courier New', monospace";
+const TEXT = "'VT323', 'Courier New', monospace";
+const LABEL = "'Pixelify Sans', 'Courier New', monospace";
 export const CONTACT_EMAIL = "geeslingthegoose@outlook.com";
-const GOOSE_URL = "https://geesling.ca/goose-192.png";
+const ART = "https://geesling.ca/email";
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-const TAG_STYLE: Record<TagTone, string> = {
-  free: `background:${C.green};color:${C.paper};`,
-  price: `background:${C.gold};color:${C.ink};border:1px solid ${C.ink};`,
-  extra: `background:${C.parchmentDark};color:${C.ink};border:1px solid ${C.ink};`,
-};
+const TAG_COLOUR: Record<TagTone, string> = { free: C.green, price: C.ink, extra: C.inkSoft };
 
+/**
+ * A field label above its box, like "Email" on the form; here the step and the price or FREE. In VT323, not the pixel
+ * label font: at this size Pixelify Sans makes 5 and 2 look like 8, and these labels are mostly numbers and prices.
+ */
+function label(text: string, colour: string = C.ink): string {
+  return `<p style="margin:0 0 4px;font-family:${TEXT};font-size:19px;letter-spacing:0.5px;line-height:1.1;color:${colour};">${text}</p>`;
+}
+
+/** One suggestion: a label, then a white box like the form's inputs. */
 function itemHtml(item: EmailItem): string {
-  const tag = item.tag
-    ? ` <span style="display:inline-block;${TAG_STYLE[item.tag.tone]}font-family:${BODY_FONT};font-size:16px;line-height:18px;padding:0 6px;vertical-align:1px;">${escapeHtml(item.tag.text)}</span>`
-    : "";
-  const step = item.step
-    ? `<td width="36" valign="top" style="padding:0 10px 0 0;"><div style="width:30px;height:30px;line-height:30px;text-align:center;background:${C.ink};color:${C.gold};font-family:${BODY_FONT};font-size:20px;">${item.step}</div></td>`
-    : "";
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;"><tr>${step}<td style="background:${C.paper};border:3px solid ${C.ink};box-shadow:3px 3px 0 ${C.ink};padding:10px 12px;">
-<p style="margin:0;font-family:${BODY_FONT};font-size:20px;line-height:1.4;color:${C.ink};">${escapeHtml(item.title)}${tag}</p>
-<p style="margin:2px 0 0;font-family:${BODY_FONT};font-size:19px;line-height:1.5;color:${C.inkSoft};">${escapeHtml(item.detail)}</p>
+  const parts = [item.step ? `${item.step}.` : "", item.tag ? `<span style="color:${TAG_COLOUR[item.tag.tone]};">${escapeHtml(item.tag.text)}</span>` : ""].filter(Boolean);
+  return `${parts.length ? label(parts.join(" ")) : ""}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;"><tr><td style="background:${C.white};border:3px solid ${C.ink};padding:9px 12px;">
+<p style="margin:0;font-family:${TEXT};font-size:22px;line-height:1.15;color:${C.ink};">${escapeHtml(item.title)}</p>
+<p style="margin:3px 0 0;font-family:${TEXT};font-size:18px;line-height:1.2;color:${C.inkSoft};">${escapeHtml(item.detail)}</p>
 </td></tr></table>`;
 }
 
+/** A small bordered chip, like the form's age buttons. */
+function chip(text: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:2px 0 14px;"><tr><td style="background:${C.paper};border:2px solid ${C.ink};box-shadow:2px 2px 0 ${C.ink};padding:5px 10px;font-family:${TEXT};font-size:19px;line-height:1.2;color:${C.ink};">${text}</td></tr></table>`;
+}
+
 export function renderEmail(content: EmailContent, unsubscribeUrl: string): { html: string; text: string } {
+  const heading = content.hero
+    ? `<h1 style="margin:0 0 4px;font-family:${TEXT};font-size:30px;line-height:1.1;font-weight:400;color:${C.ink};">${escapeHtml(content.hero.title)}</h1>
+<p style="margin:0 0 12px;font-family:${TEXT};font-size:18px;line-height:1.25;color:${C.inkSoft};">${escapeHtml(content.hero.subtitle)}</p>
+<p style="margin:0 0 16px;font-family:${TEXT};font-size:22px;line-height:1.2;color:${C.ink};">${escapeHtml(content.intro)}</p>`
+    : `<h1 style="margin:0 0 16px;font-family:${TEXT};font-size:24px;line-height:1.2;font-weight:400;color:${C.ink};">${escapeHtml(content.intro)}</h1>`;
   const sections = content.sections
-    .map((s) => `${s.heading ? `<h2 style="margin:18px 0 10px;font-family:${PIXEL_FONT};font-size:18px;line-height:1.3;letter-spacing:1px;color:${C.red};">${escapeHtml(s.heading)}</h2>` : ""}${s.items.map(itemHtml).join("")}`)
+    // VT323 here too: headings like "Dinner under $20" carry numbers, which Pixelify Sans blurs at this size.
+    .map((s) => `${s.heading ? `<h2 style="margin:18px 0 8px;font-family:${TEXT};font-size:22px;font-weight:400;letter-spacing:1.5px;color:${C.red};">${escapeHtml(s.heading.toUpperCase())}</h2>` : ""}${s.items.map(itemHtml).join("")}`)
     .join("");
-  const hero = content.hero
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;"><tr><td style="background:${C.red};border:3px solid ${C.ink};box-shadow:4px 4px 0 ${C.ink};padding:14px;">
-<h1 style="margin:0;font-family:${PIXEL_FONT};font-size:24px;line-height:1.25;letter-spacing:1px;color:${C.paper};">${escapeHtml(content.hero.title)}</h1>
-<p style="margin:4px 0 0;font-family:${BODY_FONT};font-size:19px;line-height:1.5;color:${C.paper};">${escapeHtml(content.hero.subtitle)}</p></td></tr></table>`
-    : "";
-  const total = content.total
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 12px;"><tr><td style="background:${C.ink};padding:10px 12px;font-family:${BODY_FONT};font-size:20px;line-height:1.4;color:${C.paper};">${escapeHtml(content.total.label)} <strong style="color:${C.gold};font-size:18px;">${escapeHtml(content.total.value)}</strong></td></tr></table>`
-    : "";
-  const attribution = content.attribution
-    ? `<p style="margin:0 0 12px;font-family:${BODY_FONT};font-size:17px;line-height:1.5;color:${C.inkSoft};">${escapeHtml(content.attribution)}</p>`
-    : "";
+  const total = content.total ? chip(`${escapeHtml(content.total.label)} <strong style="color:${C.red};font-weight:400;">${escapeHtml(content.total.value)}</strong>`) : "";
+  const small = (text: string) => `<p style="margin:0 0 14px;font-family:${TEXT};font-size:18px;line-height:1.2;color:${C.inkSoft};">${text}</p>`;
+  const button = (href: string, text: string, primary: boolean) =>
+    `<td style="padding:0 12px 0 0;"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:${primary ? C.red : C.paper};border:3px solid ${C.ink};box-shadow:${primary ? 4 : 3}px ${primary ? 4 : 3}px 0 ${C.ink};">
+<a href="${escapeHtml(href)}" style="display:inline-block;padding:9px 16px;font-family:${LABEL};font-size:${primary ? 16 : 14}px;font-weight:700;color:${primary ? C.white : C.ink};text-decoration:none;">${escapeHtml(text)}</a></td></tr></table></td>`;
 
   const html = `<!doctype html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -101,32 +110,32 @@ export function renderEmail(content: EmailContent, unsubscribeUrl: string): { ht
 <title>${escapeHtml(content.subject)}</title>
 <link href="https://fonts.googleapis.com/css2?family=VT323&family=Pixelify+Sans:wght@700&display=swap" rel="stylesheet">
 </head>
-<body style="margin:0;padding:0;background:${C.parchmentDark};">
+<body style="margin:0;padding:0;background:${C.sky};">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(content.preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.parchmentDark};"><tr><td align="center" style="padding:20px 12px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:${C.parchment};border:4px solid ${C.ink};box-shadow:6px 6px 0 ${C.ink};">
-<tr><td style="background:${C.ink};padding:10px 16px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-<td width="44" valign="middle"><img src="${GOOSE_URL}" width="40" height="40" alt="Geesling the goose" style="display:block;image-rendering:pixelated;"></td>
-<td valign="middle" style="padding-left:10px;font-family:${PIXEL_FONT};font-size:22px;font-weight:700;letter-spacing:2px;color:${C.gold};">GEESLING</td>
-<td align="right" valign="middle" style="font-family:${BODY_FONT};font-size:18px;color:${C.paper};">${escapeHtml(content.dateLabel)}</td>
-</tr></table></td></tr>
-<tr><td style="padding:18px 16px 6px;">
-${hero}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;"><tr><td style="background:${C.paper};border:3px solid ${C.ink};box-shadow:4px 4px 0 ${C.ink};padding:12px 14px;">
-<p style="margin:0 0 4px;font-family:${BODY_FONT};font-size:17px;letter-spacing:1px;color:${C.red};">GEESLING SAYS</p>
-<p style="margin:0;font-family:${BODY_FONT};font-size:21px;line-height:1.5;color:${C.ink};">${escapeHtml(content.intro)}</p>
-</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.sky};"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+<tr><td><img src="${ART}/sky.png" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0;"></td></tr>
+<tr><td style="padding:0 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.paper};border:4px solid ${C.ink};box-shadow:6px 6px 0 ${C.ink};"><tr><td style="padding:18px 18px 20px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;"><tr>
+<td style="font-family:${LABEL};font-size:13px;font-weight:700;letter-spacing:1.5px;color:${C.red};">GEESLING</td>
+<td align="right" style="font-family:${TEXT};font-size:17px;color:${C.inkSoft};">${escapeHtml(content.dateLabel)}</td>
+</tr></table>
+${heading}
 ${sections}
 ${total}
-${attribution}
-<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 16px;"><tr><td style="background:${C.red};border:3px solid ${C.ink};box-shadow:4px 4px 0 ${C.ink};">
-<a href="${escapeHtml(content.cta.url)}" style="display:inline-block;padding:11px 18px;font-family:${BODY_FONT};font-size:20px;color:${C.paper};text-decoration:none;">${escapeHtml(content.cta.label)}</a>
+${content.attribution ? small(escapeHtml(content.attribution)) : ""}
+${small(escapeHtml(content.outro))}
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 0;"><tr>
+${button(content.cta.url, content.cta.label, true)}
+${button("https://geesling.ca/?from=email", "Open the live map", false)}
+</tr></table>
 </td></tr></table>
-<p style="margin:0 0 18px;font-family:${BODY_FONT};font-size:20px;line-height:1.5;color:${C.ink};">${escapeHtml(content.outro)}</p>
 </td></tr>
-<tr><td style="background:${C.parchmentDark};border-top:3px solid ${C.ink};padding:12px 16px;font-family:${BODY_FONT};font-size:17px;line-height:1.6;color:${C.inkSoft};">
-You're getting this because you ticked "Send me Geesling updates" on geesling.ca. <a href="${escapeHtml(unsubscribeUrl)}" style="color:${C.ink};text-decoration:underline;">Unsubscribe from Geesling emails</a><br>
+<tr><td style="padding-top:18px;"><img src="${ART}/skyline.png" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0;"></td></tr>
+<tr><td align="center" style="padding:14px 20px 24px;font-family:${TEXT};font-size:17px;line-height:1.25;color:${C.inkSoft};">
+You're getting this because you ticked "Send me Geesling updates" on geesling.ca.<br>
+<a href="${escapeHtml(unsubscribeUrl)}" style="color:${C.ink};text-decoration:underline;">Unsubscribe from Geesling emails</a><br>
 Any questions or concerns? Email <a href="mailto:${CONTACT_EMAIL}" style="color:${C.ink};text-decoration:underline;">${CONTACT_EMAIL}</a>
 </td></tr>
 </table>

@@ -91,7 +91,7 @@ test("rendered email: accessible HTML, escaped text, unsubscribe and contact in 
   const { html, text } = renderEmail(content, "https://example.test/unsub?u=1&t=abc");
   assert.match(html, /<html lang="en"/);
   assert.match(html, /role="presentation"/);
-  assert.match(html, /alt="Geesling the goose"/);
+  assert.match(html, /<img src="https:\/\/geesling\.ca\/email\/skyline\.png"[^>]*alt=""/); // decorative scene
   assert.match(html, /Tom &amp; Jerry &lt;live&gt;/);
   assert.doesNotMatch(html, /<live>/);
   assert.match(html, /Unsubscribe from Geesling emails/);
