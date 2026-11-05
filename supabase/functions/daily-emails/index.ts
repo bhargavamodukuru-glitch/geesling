@@ -16,7 +16,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.95.3";
 
 // deno-lint-ignore no-explicit-any
 type Db = any; // the service-role client; untyped like the other functions here
-import { CONTACT_EMAIL, renderEmail, type EmailContent } from "./template.ts";
+import { CONTACT_EMAIL, renderEmail, renderPictureEmail, renderSnapshotPage, type EmailContent } from "./template.ts";
 import {
   EVENING_AREAS,
   NEIGHBOURHOODS,
@@ -235,14 +235,20 @@ async function recipients(test: boolean): Promise<Array<{ owner: string; email: 
   return (data ?? []).filter((r) => typeof r.email === "string" && r.email.includes("@")) as Array<{ owner: string; email: string }>;
 }
 
-async function send(content: EmailContent, list: Array<{ owner: string; email: string }>, idempotencyBase: string) {
+/** Only pictures Geesling's own snapshot script uploaded (public email-art bucket) go into emails. */
+function ownPicture(url: unknown): string | null {
+  return typeof url === "string" && url.startsWith(`${SUPABASE_URL}/storage/v1/object/public/email-art/`) && /^[\w:/.%-]+\.png$/.test(url) ? url : null;
+}
+
+/** Sends to each recipient: the card as a picture when one was made, otherwise the all-text card. */
+async function send(content: EmailContent, list: Array<{ owner: string; email: string }>, idempotencyBase: string, picture: string | null) {
   let sent = 0;
   const failures: string[] = [];
   for (let i = 0; i < list.length; i += 100) {
     const batch = await Promise.all(
       list.slice(i, i + 100).map(async (r) => {
         const unsub = await unsubscribeUrl(r.owner);
-        const { html, text } = renderEmail(content, unsub);
+        const { html, text } = picture ? renderPictureEmail(content, picture, unsub) : renderEmail(content, unsub);
         return {
           from: FROM,
           to: [r.email],
@@ -278,17 +284,23 @@ Deno.serve(async (request) => {
   if (!kind) return json({ skipped: "no email due now", toronto: { hour: t.hour, day: t.day } });
 
   try {
-    const content = await buildContent(kind, now);
+    // The snapshot script sends back the content it photographed with the picture, so the picture, its description
+    // and the links always match. Otherwise the content is built now.
+    const body = (await request.json().catch(() => ({}))) as { content?: EmailContent; picture?: string };
+    const picture = ownPicture(body.picture);
+    const content = picture && body.content?.sections ? body.content : await buildContent(kind, now);
     if (content.sections.every((s) => s.items.length === 0)) return json({ skipped: "nothing worth sending today", kind });
     const test = params.get("test") === "1";
+    // ?page=1: the page to photograph (renderSnapshotPage) and the content behind it; nothing is sent.
+    if (params.get("page") === "1") return json({ kind, day: t.day, content, page: renderSnapshotPage(content) });
     if (params.get("dry") === "1") {
-      const { html, text } = renderEmail(content, await unsubscribeUrl("test"));
+      const { html, text } = picture ? renderPictureEmail(content, picture, await unsubscribeUrl("test")) : renderEmail(content, await unsubscribeUrl("test"));
       return json({ dry: true, kind, subject: content.subject, preheader: content.preheader, text, html });
     }
     const list = await recipients(test);
-    const result = await send(content, list, test ? `test-${kind}-${Date.now()}` : `${kind}-${t.day}`);
-    console.log("daily email", { kind, day: t.day, test, recipients: list.length, ...result });
-    return json({ kind, day: t.day, test, subject: content.subject, recipients: list.length, ...result });
+    const result = await send(content, list, test ? `test-${kind}-${Date.now()}` : `${kind}-${t.day}`, picture);
+    console.log("daily email", { kind, day: t.day, test, picture: Boolean(picture), recipients: list.length, ...result });
+    return json({ kind, day: t.day, test, picture: Boolean(picture), subject: content.subject, recipients: list.length, ...result });
   } catch (e) {
     console.error("daily email failed", kind, (e as Error).message);
     return json({ error: (e as Error).message, kind }, 500);

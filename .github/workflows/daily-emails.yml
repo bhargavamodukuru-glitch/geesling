@@ -4,22 +4,41 @@ name: Daily emails
 # 5 pm (grab-and-go food under $20). GitHub schedules run in UTC, so each email has a run for daylight time (EDT,
 # UTC-4) and one for standard time (EST, UTC-5); the function only sends in the right Toronto hour, and its
 # idempotency keys stop a second run from sending again (supabase/functions/daily-emails).
+# scripts/render-email.mjs photographs the card in headless Chrome so inboxes show Geesling's real pixel fonts; if
+# that fails it sends the all-text version.
 on:
   schedule:
     - cron: "0 13,14 * * *" # 9 am Toronto
     - cron: "0 16,17 * * *" # noon Toronto
     - cron: "0 21,22 * * *" # 5 pm Toronto
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "Send this email now (morning, neighbourhood or evening); empty = whichever is due"
+        required: false
+      test:
+        description: "Send only to the owner (true/false)"
+        required: false
+        default: "false"
 
 jobs:
   send:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install headless Chrome
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.1
+          npx playwright install --with-deps chromium
       - name: Send the email that's due
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          KIND: ${{ github.event.inputs.kind }}
+          TEST: ${{ github.event.inputs.test }}
         run: |
-          curl --fail-with-body -sS -X POST "$SUPABASE_URL/functions/v1/daily-emails" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" -d '{}'
+          node scripts/render-email.mjs ${KIND:+--kind=$KIND} $([ "$TEST" = "true" ] && echo --test)
