@@ -153,7 +153,9 @@ function Home() {
   const [popped, setPopped] = useState(0);
 
   // The private ?team=<code> link marks this device as team, so its requests are highlighted in the usage sheet.
-  const { team } = useLocalSearchParams<{ team?: string }>();
+  // ?ask=<request> comes from the buttons in Geesling's emails: the request waits in the intro's reply box.
+  const { team, ask } = useLocalSearchParams<{ team?: string; ask?: string }>();
+  const [askFromLink] = useState(() => (typeof ask === "string" ? ask.trim().slice(0, 300) : ""));
   const [teamNote, setTeamNote] = useState<string | null>(null);
   useEffect(() => {
     if (!team) return;
@@ -487,7 +489,7 @@ function Home() {
           onSkip={endTutorial}
         />
       ) : null}
-      {intro ? <HatchIntro nightMode={dark} now={now} onToggleTheme={toggleTheme} onReveal={revealApp} onDone={finishIntro} onAsk={askFromIntro} userLocation={location} onLocate={locate} planStatus={planStatus} /> : null}
+      {intro ? <HatchIntro nightMode={dark} now={now} onToggleTheme={toggleTheme} onReveal={revealApp} onDone={finishIntro} onAsk={askFromIntro} initialPrompt={askFromLink} userLocation={location} onLocate={locate} planStatus={planStatus} /> : null}
       {teamBanner}
     </View>
   );

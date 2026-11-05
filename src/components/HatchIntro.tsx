@@ -122,9 +122,11 @@ interface Props {
   onLocate: () => Promise<LatLng | null>;
   /** Geesling's planning progress (the current step, then "ready" or "done"), shown on the form while it waits. */
   planStatus: string | null;
+  /** A request to start with in the reply box (from an email's "Plan my day" button). */
+  initialPrompt?: string;
 }
 
-export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, onAsk, userLocation, onLocate, planStatus }: Props) {
+export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, onAsk, userLocation, onLocate, planStatus, initialPrompt = "" }: Props) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const px = width < 420 ? 7 : 9;
@@ -150,7 +152,7 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
   // 0 = clear, FADE_STEPS = black. `revealed` once the app is showing behind the curtain.
   const [curtain, setCurtain] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState(initialPrompt);
   // The examples rotate while the box is empty, and hold still once it's focused or with animations off.
   const { motion } = useMotion();
   const [example, setExample] = useState(0);

@@ -24,3 +24,11 @@ verify_jwt = true
 [functions.usage-report]
 # Google Sheets calls this without a Supabase login; it checks its own secret token instead.
 verify_jwt = false
+
+[functions.daily-emails]
+# Called by GitHub Actions with the service-role key (checked again inside).
+verify_jwt = true
+
+[functions.email-unsubscribe]
+# Opened from links in emails, without a Supabase login; every link carries its own HMAC signature.
+verify_jwt = false
