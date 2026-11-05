@@ -23,16 +23,19 @@ on:
 
 jobs:
   send:
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.55 can't install Chrome on ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      # Playwright in its own folder (not the app's ~800 packages); the script runs from there so it finds it.
       - name: Install headless Chrome
         run: |
-          npm install --no-save --no-package-lock playwright@1.55.1
+          mkdir -p "$RUNNER_TEMP/render" && cp scripts/render-email.mjs "$RUNNER_TEMP/render/"
+          cd "$RUNNER_TEMP/render" && npm init -y >/dev/null && npm install --no-audit --no-fund playwright@1.55.1
           npx playwright install --with-deps chromium
       - name: Send the email that's due
         env:
@@ -41,4 +44,4 @@ jobs:
           KIND: ${{ github.event.inputs.kind }}
           TEST: ${{ github.event.inputs.test }}
         run: |
-          node scripts/render-email.mjs ${KIND:+--kind=$KIND} $([ "$TEST" = "true" ] && echo --test)
+          node "$RUNNER_TEMP/render/render-email.mjs" ${KIND:+--kind=$KIND} $([ "$TEST" = "true" ] && echo --test)
