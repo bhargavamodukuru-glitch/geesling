@@ -25,9 +25,9 @@ import {
   composeMorning,
   composeNeighbourhood,
   composeWelcome,
+  pickLiveEvents,
   dayNumber,
   dueEmail,
-  welcomeKind,
   inArea,
   inToronto,
   pickFreeEvents,
@@ -283,13 +283,13 @@ async function alreadySent(kind: EmailKind, day: string): Promise<boolean> {
   return data !== null;
 }
 
-/** People who opted in and haven't had their thank-you yet, with the Toronto hour they signed up. */
-async function pendingWelcomes(): Promise<Array<{ owner: string; email: string; hour: number }>> {
-  const { data, error } = await db().from("profiles").select("owner,email,marketing_consent_at,created_at").eq("marketing_opt_in", true).is("welcome_sent_at", null).limit(200);
+/** People who opted in and haven't had their thank-you yet. */
+async function pendingWelcomes(): Promise<Array<{ owner: string; email: string }>> {
+  const { data, error } = await db().from("profiles").select("owner,email").eq("marketing_opt_in", true).is("welcome_sent_at", null).limit(200);
   if (error) throw new Error(error.message);
   return (data ?? [])
     .filter((r) => typeof r.email === "string" && r.email.includes("@"))
-    .map((r) => ({ owner: r.owner as string, email: r.email as string, hour: toronto(new Date((r.marketing_consent_at ?? r.created_at) as string)).hour }));
+    .map((r) => ({ owner: r.owner as string, email: r.email as string }));
 }
 
 /** One thank-you, with its own idempotency key, so a person gets exactly one however often this runs. */
@@ -305,26 +305,29 @@ async function sendWelcome(content: EmailContent, r: { owner: string; email: str
   return response.ok || response.status === 409;
 }
 
+/** The thank-you, built from what's on in Toronto right now (up to 3 live events). */
+async function buildWelcome(now: Date): Promise<EmailContent> {
+  const t = toronto(now);
+  const events = await eventsOnToday(db(), now, t.midnight, {});
+  return composeWelcome({ dateText: t.dateText, picks: pickLiveEvents(events, now, t.midnight, t.month), now });
+}
+
 /**
- * Thank-you emails (?welcome=1). ?check=1: how many are waiting. ?page=1: one page per kind of recommendation (people
- * grouped by sign-up hour), with who's in each group. A POST with { content, picture, owners } sends those people
- * their thank-you (re-checked: still opted in, not yet thanked) and marks them done; without a picture it builds the
- * all-text version. ?test=1&kind=…(&to=…) sends one thank-you to the owner (or `to`) and marks nobody.
+ * Thank-you emails (?welcome=1). ?check=1: how many are waiting. ?page=1: the page to photograph (everyone waiting
+ * gets the same one: what's on right now) and who it's for. A POST with { content, picture, owners } sends those
+ * people their thank-you (re-checked: still opted in, not yet thanked) and marks them done; without a picture it builds
+ * the all-text version. ?test=1(&to=…) sends one thank-you to the owner (or `to`) and marks nobody.
  */
 async function handleWelcome(params: URLSearchParams, body: { content?: EmailContent; picture?: string; owners?: string[] }, now: Date): Promise<Response> {
-  const t = toronto(now);
-  const asked = params.get("kind");
-  const askedKind: EmailKind | null = asked === "morning" || asked === "neighbourhood" || asked === "evening" ? asked : null;
-  const build = async (kind: EmailKind) => composeWelcome(await buildContent(kind, now), kind, t.dateText);
+  const picture = ownPicture(body.picture);
+  const contentFor = async () => (picture && body.content?.sections ? body.content : await buildWelcome(now));
 
   if (params.get("test") === "1") {
-    const kind = askedKind ?? welcomeKind(t.hour);
-    const picture = ownPicture(body.picture);
-    const content = picture && body.content?.sections ? body.content : await build(kind);
-    if (params.get("page") === "1") return json({ groups: [{ kind, owners: [], content, page: renderSnapshotPage(content) }] });
+    const content = await contentFor();
+    if (params.get("page") === "1") return json({ groups: [{ kind: "welcome", owners: [], content, page: renderSnapshotPage(content) }] });
     const [to] = await recipients(true, params.get("to"));
     const ok = await sendWelcome(content, to, picture, true);
-    return json({ welcome: true, test: true, kind, picture: Boolean(picture), sent: ok ? 1 : 0 });
+    return json({ welcome: true, test: true, picture: Boolean(picture), sent: ok ? 1 : 0 });
   }
 
   const pending = await pendingWelcomes();
@@ -332,30 +335,20 @@ async function handleWelcome(params: URLSearchParams, body: { content?: EmailCon
   if (!pending.length) return json({ skipped: "no new sign-ups" });
 
   if (params.get("page") === "1") {
-    const groups = new Map<EmailKind, string[]>();
-    for (const p of pending) groups.set(welcomeKind(p.hour), [...(groups.get(welcomeKind(p.hour)) ?? []), p.owner]);
-    const out = [];
-    for (const [kind, owners] of groups) {
-      const content = await build(kind);
-      out.push({ kind, owners, content, page: renderSnapshotPage(content) });
-    }
-    return json({ groups: out });
+    const content = await buildWelcome(now);
+    return json({ groups: [{ kind: "welcome", owners: pending.map((p) => p.owner), content, page: renderSnapshotPage(content) }] });
   }
 
-  // Send: to the given owners if this run photographed their group, otherwise everyone waiting (text version).
-  const picture = ownPicture(body.picture);
+  // Send: to the given owners if this run photographed their picture, otherwise everyone waiting (text version).
   const wanted = Array.isArray(body.owners) ? new Set(body.owners) : null;
   const targets = pending.filter((p) => !wanted || wanted.has(p.owner));
+  const content = await contentFor();
   let sent = 0;
   const done: string[] = [];
-  for (const kind of new Set(targets.map((p) => welcomeKind(p.hour)))) {
-    const group = targets.filter((p) => welcomeKind(p.hour) === kind);
-    const content = picture && body.content?.sections ? body.content : await build(kind);
-    for (const r of group) {
-      if (await sendWelcome(content, r, picture, false)) {
-        sent++;
-        done.push(r.owner);
-      }
+  for (const r of targets) {
+    if (await sendWelcome(content, r, picture, false)) {
+      sent++;
+      done.push(r.owner);
     }
   }
   if (done.length) {

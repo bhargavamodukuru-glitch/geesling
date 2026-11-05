@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { composeEvening, composeMorning, composeNeighbourhood, composeWelcome, dueEmail, welcomeKind, inToronto, pickFreeEvents, spendRange, whenLabel, NEIGHBOURHOODS, type EventRow, type PlaceRow } from "../supabase/functions/daily-emails/picks.ts";
+import { composeEvening, composeMorning, composeNeighbourhood, composeWelcome, dueEmail, pickLiveEvents, inToronto, pickFreeEvents, spendRange, whenLabel, NEIGHBOURHOODS, type EventRow, type PlaceRow } from "../supabase/functions/daily-emails/picks.ts";
 import { escapeHtml, renderEmail } from "../supabase/functions/daily-emails/template.ts";
 
 const now = new Date("2026-11-05T14:00:00Z"); // 9 am Toronto
@@ -110,23 +110,47 @@ test("which email is due: 9–10 am, noon–1 pm, 5–6 pm Toronto", () => {
   assert.equal(dueEmail(20), null);
 });
 
-test("thank-you recommendations follow the sign-up hour", () => {
-  assert.equal(welcomeKind(8), "morning");
-  assert.equal(welcomeKind(11), "neighbourhood");
-  assert.equal(welcomeKind(15), "neighbourhood");
-  assert.equal(welcomeKind(16), "evening");
-  assert.equal(welcomeKind(20), "evening");
-  assert.equal(welcomeKind(23), "morning");
-  assert.equal(welcomeKind(2), "morning");
+test("thank-you events: on now first, then starting soon, then later; three at most", () => {
+  // now = 9 am Toronto (14:00Z); midnight = end of the day.
+  const picks = pickLiveEvents(
+    [
+      ev({ title: "Tonight's big show", categories: ["music"], quality_score: 99, schedule: [{ start: "2026-11-06T01:00:00Z", end: "2026-11-06T03:00:00Z" }] }),
+      ev({ title: "Gallery on now", categories: ["gallery"], quality_score: 60, schedule: [{ start: "2026-11-05T13:00:00Z", end: "2026-11-05T23:00:00Z" }] }),
+      ev({ title: "Brunch market soon", categories: ["market"], quality_score: 70, is_free: false, price_min: 5, schedule: [{ start: "2026-11-05T16:00:00Z", end: "2026-11-05T19:00:00Z" }] }),
+      ev({ title: "Season Pass", categories: ["sports"], quality_score: 100 }),
+      ev({ title: "Koto Fall Beginner Class 1", categories: ["arts_culture"], quality_score: 100, is_free: false, price_min: 276 }),
+      ev({ title: "Pricey gala", categories: ["nightlife"], quality_score: 100, is_free: false, price_min: 85 }),
+      ev({ title: "Runs into tomorrow", categories: ["film"], quality_score: 100, schedule: [{ start: "2026-11-05T13:00:00Z", end: "2026-11-06T16:30:00Z" }] }),
+      ev({ title: "Yesterday", schedule: [{ start: "2026-11-04T13:00:00Z", end: "2026-11-04T23:00:00Z" }] }),
+    ],
+    now,
+    midnight,
+    11,
+  );
+  assert.deepEqual(picks.map((p) => p.e.title), ["Gallery on now", "Brunch market soon", "Tonight's big show"]);
 });
 
-test("a thank-you keeps the recommendations and puts the thanks on top", () => {
-  const base = composeEvening({ dateLabel: "Thu, Nov 5 · 5 PM", areaName: "downtown", bites: [place("Big Pita")], dinner: [], coffee: [] });
-  const w = composeWelcome(base, "evening", "Thu, Nov 5");
+test("the thank-you is a short note, live events with on-now/starts labels, and one button to geesling.ca", () => {
+  const picks = pickLiveEvents(
+    [
+      ev({ title: "Gallery on now", schedule: [{ start: "2026-11-05T13:00:00Z", end: "2026-11-05T23:00:00Z" }] }),
+      ev({ title: "Jazz", categories: ["music"], is_free: false, price_min: 12.5, schedule: [{ start: "2026-11-06T00:00:00Z", end: "2026-11-06T02:00:00Z" }] }),
+    ],
+    now,
+    midnight,
+    11,
+  );
+  const w = composeWelcome({ dateText: "Thu, Nov 5", picks, now });
   assert.equal(w.subject, "🪿 Thanks for joining Geesling!");
   assert.equal(w.hero?.title, "Thanks for joining Geesling!");
-  assert.match(w.hero?.subtitle ?? "", /9 am, noon and 5 pm/);
   assert.equal(w.dateLabel, "Thu, Nov 5 · WELCOME");
-  assert.deepEqual(w.sections, base.sections);
-  assert.equal(w.cta.url, base.cta.url);
+  assert.deepEqual(w.sections[0].items.map((i) => [i.title, i.detail, i.tag?.text]), [
+    ["Gallery on now", "The Image Centre · on now · until 6 pm", "FREE"],
+    ["Jazz", "The Image Centre · starts 7 pm", "from $13"],
+  ]);
+  assert.equal(w.cta.label, "See more on geesling.ca");
+  assert.equal(w.cta.url, "https://geesling.ca/?from=email-welcome");
+  assert.equal(w.singleButton, true);
+  const { html } = renderEmail(w, "https://example.test/u");
+  assert.doesNotMatch(html, /Open the live map/);
 });

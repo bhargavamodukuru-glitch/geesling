@@ -43,6 +43,8 @@ export interface EmailContent {
   total?: { label: string; value: string };
   attribution?: string;
   cta: { label: string; url: string };
+  /** Leave out the second "Open the live map" button (the thank-you has a single button to geesling.ca). */
+  singleButton?: boolean;
   outro: string;
 }
 
@@ -129,7 +131,7 @@ ${content.attribution ? small(content.attribution) : ""}
 ${small(content.outro)}
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 0;">
 ${button(content.cta.url, content.cta.label, true)}
-${button(MAP_URL, "Open the live map", false)}
+${content.singleButton ? "" : button(MAP_URL, "Open the live map", false)}
 </table>
 </td></tr></table>`;
 }

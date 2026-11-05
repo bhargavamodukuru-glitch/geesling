@@ -81,7 +81,7 @@ export function inArea(a: Area, lat: number, lng: number): boolean {
 // Listings that make a poor "go do this today" pick: programmes for kids or members, passes, drives, and events
 // whose season has passed. Checked against the title (and categories for family-only).
 const NOT_A_PICK =
-  /\b(youth|kids?|children|toddler|teen|seniors?|program(me)?s?|registration|season pass|membership|candy drive|food drive|fundraiser|webinar|virtual|online|cancel+ed|postponed|sold out)\b/i;
+  /\b(youth|kids?|children|toddler|teen|seniors?|program(me)?s?|registration|class(es)?|courses?|lessons?|season pass|membership|candy drive|food drive|fundraiser|webinar|virtual|online|cancel+ed|postponed|sold out)\b/i;
 const OUTSIDE_CITY = /\b(mississauga|brampton|vaughan|markham|richmond hill|pickering|ajax|oakville)\b/i;
 
 function seasonOver(title: string, month: number): boolean {
@@ -262,32 +262,58 @@ export function dueEmail(hour: number): EmailKind | null {
 }
 
 /**
- * What a thank-you email recommends, from the Toronto hour someone signed up: the morning's free picks until 11, a
- * neighbourhood day until 4, grab-and-go food until 9 pm, then whatever free is still on (the morning email's picks).
+ * Live events for the thank-you: on right now first, then starting within 3 hours, then later today; in Toronto,
+ * worth picking, one per category where possible, best listings first. Free or paid.
  */
-export function welcomeKind(hour: number): EmailKind {
-  if (hour >= 6 && hour < 11) return "morning";
-  if (hour >= 11 && hour < 16) return "neighbourhood";
-  if (hour >= 16 && hour < 21) return "evening";
-  return "morning";
+export function pickLiveEvents(events: EventRow[], now: Date, until: Date, month: number, n = 3): Array<{ e: EventRow; when: { start: Date; end: Date } }> {
+  const soon = new Date(now.getTime() + 3 * 3600_000);
+  const tier = (s: { start: Date }) => (s.start <= now ? 0 : s.start <= soon ? 1 : 2);
+  const candidates = events
+    // Free or cheap (over $40 isn't what Geesling is for), not a class or programme.
+    .filter((e) => inToronto(e) && worthPicking(e.title, month) && !(e.categories.length === 1 && e.categories[0] === "family") && (e.price_min === null || e.price_min <= 40))
+    .map((e) => ({ e, when: sessionIn(e, now, until) }))
+    // A time block over 14 hours (multi-day listings) would read "on now · until 11:30 am" in the afternoon.
+    .filter((x): x is { e: EventRow; when: { start: Date; end: Date } } => x.when !== null && x.when.end.getTime() - x.when.start.getTime() <= 14 * 3600_000)
+    .sort((a, b) => tier(a.when) - tier(b.when) || b.e.quality_score - a.e.quality_score || a.when.start.getTime() - b.when.start.getTime());
+  const out: typeof candidates = [];
+  const usedCats = new Set<string>();
+  const usedTitles = new Set<string>();
+  for (const pass of [0, 1]) {
+    for (const c of candidates) {
+      if (out.length === n) break;
+      const cat = c.e.categories[0] ?? "other";
+      const key = c.e.title.toLowerCase().replace(/\W+/g, " ").trim();
+      if (usedTitles.has(key) || (pass === 0 && usedCats.has(cat))) continue;
+      usedCats.add(cat);
+      usedTitles.add(key);
+      out.push(c);
+    }
+  }
+  return out;
 }
 
-/** Wraps a daily email's recommendations in the thank-you: same design, a thank-you banner and subject on top. */
-export function composeWelcome(base: EmailContent, kind: EmailKind, dateText: string): EmailContent {
-  const lead: Record<EmailKind, string> = {
-    morning: "Here's what's on today that won't cost you a thing:",
-    neighbourhood: base.hero ? `Here's an idea for today: ${base.hero.title.replace(/^A day/, "a day")}, under $20.` : "Here's an idea for today:",
-    evening: "Hungry? Here's where to grab something good tonight, all under $20:",
-  };
+/** "on now · until 6 pm" or "starts 7 pm". */
+function liveLabel(when: { start: Date; end: Date }, now: Date): string {
+  return when.start <= now ? `on now · until ${whenLabel(when, now).replace(/^until /, "")}` : `starts ${whenLabel(when, now)}`;
+}
+
+/** The thank-you: a short note, up to 3 events happening when they signed up, and one button to geesling.ca. */
+export function composeWelcome(args: { dateText: string; picks: Array<{ e: EventRow; when: { start: Date; end: Date } }>; now: Date }): EmailContent {
+  const items: EmailItem[] = args.picks.map(({ e, when }) => ({
+    title: e.title.trim(),
+    detail: `${e.venue_name?.trim() || "Toronto"} · ${liveLabel(when, args.now)}`,
+    tag: e.is_free ? { text: "FREE", tone: "free" } : e.price_min !== null ? { text: `from $${Math.round(e.price_min)}`, tone: "price" } : undefined,
+  }));
   return {
-    ...base,
-    dateLabel: `${dateText} · WELCOME`,
+    dateLabel: `${args.dateText} · WELCOME`,
     subject: "🪿 Thanks for joining Geesling!",
-    preheader: `You'll hear from me at 9 am, noon and 5 pm. ${base.preheader}`,
-    hero: { title: "Thanks for joining Geesling!", subtitle: "Honk! You'll hear from me at 9 am, noon and 5 pm with free and cheap things to do in Toronto." },
-    intro: lead[kind],
-    // The 5 pm email says "open as of 5 pm"; a thank-you can go out at any hour.
-    attribution: base.attribution?.replace("open as of 5 pm", "open when this was sent"),
+    preheader: items.length ? `Here's what's happening in Toronto right now: ${items[0].title} and more.` : "Here's what's happening in Toronto right now.",
+    hero: { title: "Thanks for joining Geesling!", subtitle: "Honk! Glad you're here. You'll hear from me at 9 am, noon and 5 pm." },
+    intro: items.length ? "Here's what's happening in Toronto right now:" : "There's always something happening in Toronto. Have a look:",
+    sections: [{ items }],
+    cta: { label: "See more on geesling.ca", url: "https://geesling.ca/?from=email-welcome" },
+    singleButton: true,
+    outro: "There's lots more on the live map, all over the city.",
   };
 }
 
