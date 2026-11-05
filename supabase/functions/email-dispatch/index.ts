@@ -1,7 +1,8 @@
-// Starts Geesling's email jobs on GitHub Actions right when they're needed, instead of waiting for GitHub's own
+// Starts Geesling's GitHub Actions jobs (emails and the event import) right when they're needed, instead of waiting for GitHub's own
 // scheduler (which ran 0 of the thank-you checks and 0 of the noon backups on its first day).
 //   POST ?welcome=1  → if anyone has opted in and not been thanked, start welcome-emails.yml
 //   POST ?daily=1    → if a daily email is due now in Toronto and hasn't gone out today, start daily-emails.yml
+//   POST ?ingest=1   → start the event import (ingest.yml), at most every 2½ hours
 // Called by a database trigger the moment someone saves the form with the updates box ticked (welcome), and by
 // pg_cron at 9 am, noon and 5 pm Toronto plus a 10-minute catch-up (migration 20261105300000).
 // Public (verify_jwt = false), but it only ever starts a run when there's real work, and at most one per job per
@@ -66,8 +67,14 @@ Deno.serve(async (request) => {
     workflow = "daily-emails.yml";
     // Give a started run time to finish before starting another (it records the send when done).
     quietSeconds = 15 * 60;
+  } else if (params.get("ingest") === "1") {
+    // The event import (City of Toronto, Ticketmaster, torevent) every 3 hours; GitHub's own schedule ran it only
+    // 3–4 times a day. The workflow's concurrency group also stops two imports overlapping.
+    job = "ingest";
+    workflow = "ingest.yml";
+    quietSeconds = 150 * 60;
   } else {
-    return json({ error: "welcome=1 or daily=1" }, 400);
+    return json({ error: "welcome=1, daily=1 or ingest=1" }, 400);
   }
 
   // At most one start per job per quiet period, however often this is called.
