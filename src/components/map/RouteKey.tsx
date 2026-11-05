@@ -31,5 +31,5 @@ const styles = StyleSheet.create({
   solid: { width: 24, height: 4 },
   dashes: { width: 24, flexDirection: "row", justifyContent: "space-between" },
   dash: { width: 5, height: 4, backgroundColor: colors.woodDark },
-  label: { fontFamily: fonts.body, fontSize: 16, lineHeight: 16, color: colors.ink },
+  label: { fontFamily: fonts.body, fontSize: 13, lineHeight: 15, color: colors.ink },
 });

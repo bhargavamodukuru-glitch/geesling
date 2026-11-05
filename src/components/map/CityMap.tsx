@@ -164,7 +164,7 @@ export function CityMap({ items, walk, selectedId, userLocation, focusKey, onSel
 
 const styles = StyleSheet.create({
   chip: { backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 5, paddingVertical: 1 },
-  chipText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 16, color: colors.white },
+  chipText: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.white },
   chipAlight: { backgroundColor: colors.paper },
   chipAlightText: { color: colors.accent },
 });

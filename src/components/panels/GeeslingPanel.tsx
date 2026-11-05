@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontFamily: fonts.body,
-    fontSize: 20,
+    fontSize: 15,
     color: colors.ink,
   },
 });

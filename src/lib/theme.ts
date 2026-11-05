@@ -38,7 +38,8 @@ export const colors = { ...everyday, ...(HALLOWEEN ? halloween : {}) };
 export const fonts = {
   heading: "PixelifySans_700Bold",
   headingRegular: "PixelifySans_400Regular",
-  body: "VT323_400Regular",
+  // Easier to read than the narrow VT323 the app used before; sizes were scaled to 3/4 to match.
+  body: "PixelifySans_400Regular",
 };
 
 /** Hard, offset pixel shadow (no blur) like the Stardew menus. */
@@ -54,8 +55,8 @@ export const text = {
   title: { fontFamily: fonts.heading, color: colors.accent, fontSize: 22, letterSpacing: 1 } satisfies TextStyle,
   h2: { fontFamily: fonts.heading, color: colors.ink, fontSize: 17 } satisfies TextStyle,
   label: { fontFamily: fonts.headingRegular, color: colors.ink, fontSize: 13 } satisfies TextStyle,
-  body: { fontFamily: fonts.body, color: colors.ink, fontSize: 21, lineHeight: 22 } satisfies TextStyle,
-  small: { fontFamily: fonts.body, color: colors.inkSoft, fontSize: 18, lineHeight: 19 } satisfies TextStyle,
+  body: { fontFamily: fonts.body, color: colors.ink, fontSize: 16, lineHeight: 22 } satisfies TextStyle,
+  small: { fontFamily: fonts.body, color: colors.inkSoft, fontSize: 14, lineHeight: 19 } satisfies TextStyle,
 };
 
 export const CATEGORY_LABELS: Record<string, { label: string; emoji: string }> = {

@@ -185,5 +185,5 @@ const styles = StyleSheet.create({
   note: { color: colors.accent },
   nav: { flexDirection: "row", alignItems: "center", gap: 8 },
   // Paper pill so the link stays readable over the skyline backdrop in day and night scenes.
-  defaults: { alignSelf: "center", fontFamily: fonts.body, fontSize: 18, color: colors.ink, textDecorationLine: "underline", backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 10, paddingVertical: 4, overflow: "hidden" },
+  defaults: { alignSelf: "center", fontFamily: fonts.body, fontSize: 14, color: colors.ink, textDecorationLine: "underline", backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 10, paddingVertical: 4, overflow: "hidden" },
 });

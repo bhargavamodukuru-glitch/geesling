@@ -92,11 +92,11 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontFamily: fonts.body,
-    fontSize: 19,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 19,
   },
   buttonTextSmall: {
-    fontSize: 16,
+    fontSize: 13,
     lineHeight: 18,
   },
   tag: {
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   },
   tagText: {
     fontFamily: fonts.body,
-    fontSize: 16,
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

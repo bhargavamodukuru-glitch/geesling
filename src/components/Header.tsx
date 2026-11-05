@@ -35,5 +35,5 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
   },
   title: { fontFamily: fonts.heading, fontSize: 18, color: colors.accent, letterSpacing: 2 },
-  sub: { fontFamily: fonts.body, fontSize: 15, color: colors.inkSoft, marginTop: -2 },
+  sub: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, marginTop: -2 },
 });

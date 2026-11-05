@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   wrap: { width: PIN_WIDTH, height: PIN_HEIGHT, alignItems: "center", justifyContent: "flex-end" },
   label: { borderWidth: 2, borderColor: colors.ink, paddingHorizontal: 4, marginBottom: 2 },
   labelSpacer: { height: 18 },
-  labelText: { fontFamily: fonts.body, fontSize: 18, lineHeight: 18 },
+  labelText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 16 },
   row: { flexDirection: "row", alignItems: "center" },
   sideSpacer: { width: 22, alignItems: "flex-end" },
   paidBadge: { width: 16, height: 16, marginRight: 2, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   starBadge: { position: "absolute", top: -10, right: -10, width: 18, height: 18, backgroundColor: colors.gold, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },
   starText: { fontSize: 12, lineHeight: 14, color: colors.ink },
   icon: { fontSize: 14 },
-  orderText: { fontFamily: fonts.body, fontSize: 24, lineHeight: 24, color: colors.white },
+  orderText: { fontFamily: fonts.body, fontSize: 18, lineHeight: 21, color: colors.white },
   pointer: {
     width: 0,
     height: 0,
