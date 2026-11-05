@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { PixelButton } from "@/components/Pixel";
-import { deleteProfile, saveProfile } from "@/lib/account";
+import { saveProfile } from "@/lib/account";
 import { askPushPermission, disablePush, enablePush, pushSupported } from "@/lib/push";
 import { AGE_RANGES, PERSONAS, cleanEmail, cleanPhone, type AgeRange, type Persona, type Profile } from "@/lib/profile";
 import { colors, fonts, text } from "@/lib/theme";
@@ -13,14 +13,12 @@ interface Props {
   onSaved: () => void;
   /** A second, quieter button beside Save (Cancel when editing, Skip for now on the opening screen). */
   secondary?: { label: string; onPress: () => void };
-  /** Called once saved details are deleted (offered only when `initial` holds saved details). */
-  onDeleted?: () => void;
 }
 
 const CONTACT_EMAIL = "geeslingthegoose@outlook.com";
 
 /** The "about you" questions: email, phone, what brings them to Toronto, age range and the updates opt-in. */
-export function AboutYouForm({ initial = null, onSaved, secondary, onDeleted }: Props) {
+export function AboutYouForm({ initial = null, onSaved, secondary }: Props) {
   const [emailInput, setEmailInput] = useState(initial?.email ?? "");
   const [phoneInput, setPhoneInput] = useState(initial?.phone ?? "");
   const [persona, setPersona] = useState<Persona | null>(initial?.persona ?? null);
@@ -28,7 +26,6 @@ export function AboutYouForm({ initial = null, onSaved, secondary, onDeleted }: 
   const [marketing, setMarketing] = useState(initial?.marketing_opt_in ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const save = async () => {
     // Ask for notification permission right away, while this still counts as the tap (browsers require that).
@@ -53,18 +50,6 @@ export function AboutYouForm({ initial = null, onSaved, secondary, onDeleted }: 
     }
   };
 
-  const remove = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await disablePush().catch(() => {});
-      await deleteProfile();
-      onDeleted?.();
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
-    }
-  };
 
   return (
     <View style={styles.form}>
@@ -93,22 +78,6 @@ export function AboutYouForm({ initial = null, onSaved, secondary, onDeleted }: 
         <PixelButton label={busy ? "Saving…" : "Save"} tone="red" disabled={busy} onPress={() => void save()} />
         {secondary ? <PixelButton label={secondary.label} small disabled={busy} onPress={secondary.onPress} /> : null}
       </View>
-      {/* Saved details can always be deleted here: email, phone, answers, and any notifications. */}
-      {initial ? (
-        confirmDelete ? (
-          <View style={styles.confirm} accessibilityLiveRegion="polite">
-            <Text style={text.small}>Delete your email, phone and answers, and stop all updates?</Text>
-            <View style={styles.actions}>
-              <PixelButton label={busy ? "Deleting…" : "Yes, delete"} tone="red" small disabled={busy} onPress={() => void remove()} />
-              <PixelButton label="Keep them" small disabled={busy} onPress={() => setConfirmDelete(false)} />
-            </View>
-          </View>
-        ) : (
-          <Pressable onPress={() => setConfirmDelete(true)} accessibilityRole="button" hitSlop={8}>
-            <Text style={styles.deleteLink}>Delete my details</Text>
-          </Pressable>
-        )
-      ) : null}
     </View>
   );
 }
@@ -214,8 +183,6 @@ const styles = StyleSheet.create({
   boxOn: { backgroundColor: colors.freeDark },
   tick: { color: colors.white, fontFamily: fonts.heading, fontSize: 14, lineHeight: 16 },
   error: { fontFamily: fonts.body, fontSize: 18, color: colors.accent },
-  confirm: { gap: 8, borderWidth: 2, borderColor: colors.accent, padding: 10, backgroundColor: colors.paper },
   mailLink: { color: colors.ink, textDecorationLine: "underline" },
-  deleteLink: { fontFamily: fonts.body, fontSize: 17, color: colors.accent, textDecorationLine: "underline" },
   actions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
 });
