@@ -29,14 +29,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function page(title: string, body: string, status = 200): Response {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title} · Geesling</title>
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Pixelify+Sans:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Pixelify+Sans:wght@700&display=swap" rel="stylesheet">
 <style>
-body{margin:0;background:#EAD3A0;font-family:'Atkinson Hyperlegible',Verdana,Arial,sans-serif;color:#3B2412}
+body{margin:0;background:#EAD3A0;font-family:'VT323','Courier New',monospace;color:#3B2412}
 main{max-width:480px;margin:48px auto;padding:0 16px}
 .card{background:#F6E7C1;border:4px solid #3B2412;box-shadow:6px 6px 0 #3B2412;padding:20px}
 h1{font-family:'Pixelify Sans','Courier New',monospace;font-size:24px;margin:0 0 10px;color:#C8412F}
-p{font-size:17px;line-height:1.5;margin:0 0 14px}
-button{font:700 17px 'Atkinson Hyperlegible',Verdana,sans-serif;background:#C8412F;color:#FFF8E6;border:3px solid #3B2412;box-shadow:4px 4px 0 #3B2412;padding:10px 18px;cursor:pointer}
+p{font-size:21px;line-height:1.3;margin:0 0 14px}
+button{font:21px 'VT323','Courier New',monospace;background:#C8412F;color:#FFF8E6;border:3px solid #3B2412;box-shadow:4px 4px 0 #3B2412;padding:10px 18px;cursor:pointer}
 button:focus-visible,a:focus-visible{outline:3px solid #3B2412;outline-offset:2px;box-shadow:0 0 0 6px #F2C14E}
 a{color:#3B2412}
 </style></head><body><main><div class="card"><h1>${title}</h1>${body}</div></main></body></html>`;
