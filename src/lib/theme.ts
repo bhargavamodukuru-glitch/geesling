@@ -36,10 +36,13 @@ const halloween: Partial<typeof everyday> = {
 export const colors = { ...everyday, ...(HALLOWEEN ? halloween : {}) };
 
 export const fonts = {
+  // Pixel font for big display text only (17px and up), where its letters stay distinct.
   heading: "PixelifySans_700Bold",
   headingRegular: "PixelifySans_400Regular",
-  // Easier to read than the narrow VT323 the app used before; sizes were scaled to 3/4 to match.
-  body: "PixelifySans_400Regular",
+  // Atkinson Hyperlegible (Braille Institute) for everything people read: its 5/8, e/c, I/l/1 and 0/O are
+  // designed to be told apart, unlike pixel fonts at small sizes.
+  body: "AtkinsonHyperlegible_400Regular",
+  bodyBold: "AtkinsonHyperlegible_700Bold",
 };
 
 /** Hard, offset pixel shadow (no blur) like the Stardew menus. */
@@ -54,7 +57,7 @@ export function pixelShadow(offset = 4): ViewStyle {
 export const text = {
   title: { fontFamily: fonts.heading, color: colors.accent, fontSize: 22, letterSpacing: 1 } satisfies TextStyle,
   h2: { fontFamily: fonts.heading, color: colors.ink, fontSize: 17 } satisfies TextStyle,
-  label: { fontFamily: fonts.headingRegular, color: colors.ink, fontSize: 13 } satisfies TextStyle,
+  label: { fontFamily: fonts.bodyBold, color: colors.ink, fontSize: 14 } satisfies TextStyle,
   body: { fontFamily: fonts.body, color: colors.ink, fontSize: 16, lineHeight: 22 } satisfies TextStyle,
   small: { fontFamily: fonts.body, color: colors.inkSoft, fontSize: 14, lineHeight: 19 } satisfies TextStyle,
 };

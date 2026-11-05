@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center" },
   sideSpacer: { width: 22, alignItems: "flex-end" },
   paidBadge: { width: 16, height: 16, marginRight: 2, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink, alignItems: "center", justifyContent: "center" },
-  paidText: { fontFamily: fonts.heading, fontSize: 10, lineHeight: 12, color: colors.ink },
+  paidText: { fontFamily: fonts.bodyBold, fontSize: 11, lineHeight: 12, color: colors.ink },
   side: { width: 22, alignItems: "flex-start" },
   cheers: { fontSize: 15, marginLeft: 2 },
   pin: { width: 30, height: 30, borderWidth: 3, alignItems: "center", justifyContent: "center", overflow: "visible" },

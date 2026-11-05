@@ -170,9 +170,9 @@ const styles = StyleSheet.create({
   body: { flexGrow: 0, flexShrink: 1 },
   image: { width: "100%", height: 140, borderWidth: 2, borderColor: colors.ink },
   note: { backgroundColor: colors.parchment, borderWidth: 2, borderColor: colors.wood, padding: 8 },
-  noteLabel: { fontFamily: fonts.heading, fontSize: 11, color: colors.accent },
+  noteLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.accent },
   rsvp: { backgroundColor: "#FBE3DF", borderWidth: 2, borderColor: colors.accent, padding: 8, gap: 2 },
-  rsvpTitle: { fontFamily: fonts.heading, fontSize: 13, color: colors.accent },
+  rsvpTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.accent },
   source: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   socialButton: {

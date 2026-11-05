@@ -1,5 +1,5 @@
 import { PixelifySans_400Regular, PixelifySans_700Bold } from "@expo-google-fonts/pixelify-sans";
-import { VT323_400Regular } from "@expo-google-fonts/vt323";
+import { AtkinsonHyperlegible_400Regular, AtkinsonHyperlegible_700Bold } from "@expo-google-fonts/atkinson-hyperlegible";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -16,7 +16,7 @@ import { colors } from "@/lib/theme";
 const FOCUS_CSS = `:focus-visible { outline: 3px solid ${colors.ink} !important; outline-offset: 2px; box-shadow: 0 0 0 6px ${colors.gold} !important; }`;
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ PixelifySans_400Regular, PixelifySans_700Bold, VT323_400Regular });
+  const [fontsLoaded] = useFonts({ PixelifySans_400Regular, PixelifySans_700Bold, AtkinsonHyperlegible_400Regular, AtkinsonHyperlegible_700Bold });
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
