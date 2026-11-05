@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { PixelButton } from "@/components/Pixel";
 import { deleteProfile, saveProfile } from "@/lib/account";
 import { askPushPermission, disablePush, enablePush, pushSupported } from "@/lib/push";
@@ -16,6 +16,8 @@ interface Props {
   /** Called once saved details are deleted (offered only when `initial` holds saved details). */
   onDeleted?: () => void;
 }
+
+const CONTACT_EMAIL = "geeslingthegoose@outlook.com";
 
 /** The "about you" questions: email, phone, what brings them to Toronto, age range and the updates opt-in. */
 export function AboutYouForm({ initial = null, onSaved, secondary, onDeleted }: Props) {
@@ -80,7 +82,11 @@ export function AboutYouForm({ initial = null, onSaved, secondary, onDeleted }: 
         <Text style={text.small}>Your browser will ask to allow notifications: a heads-up at 8:30 am and, on weekdays, at 5 pm.</Text>
       ) : null}
       <Text style={text.small}>
-        We use your details to understand who uses Geesling, and to send updates only if you tick the box. We never sell them, and you can delete them any time{initial ? " (below)" : " from this form"}.
+        We use your details to understand who uses Geesling, and to send updates only if you tick the box. Contact{" "}
+        <Text style={styles.mailLink} accessibilityRole="link" onPress={() => void Linking.openURL(`mailto:${CONTACT_EMAIL}`)}>
+          {CONTACT_EMAIL}
+        </Text>{" "}
+        for any questions or concerns.
       </Text>
       {error ? <Text style={styles.error} accessibilityLiveRegion="assertive">{error}</Text> : null}
       <View style={styles.actions}>
@@ -209,6 +215,7 @@ const styles = StyleSheet.create({
   tick: { color: colors.white, fontFamily: fonts.heading, fontSize: 14, lineHeight: 16 },
   error: { fontFamily: fonts.body, fontSize: 18, color: colors.accent },
   confirm: { gap: 8, borderWidth: 2, borderColor: colors.accent, padding: 10, backgroundColor: colors.paper },
+  mailLink: { color: colors.ink, textDecorationLine: "underline" },
   deleteLink: { fontFamily: fonts.body, fontSize: 17, color: colors.accent, textDecorationLine: "underline" },
   actions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
 });
