@@ -2,7 +2,7 @@
 // Look: the same as geesling.ca's "about you" form. Geesling's sky (sun, clouds) above a paper card with a chunky ink
 // border and hard shadow, the skyline (CN Tower, trees, grass, lake, the goose) below. Inside the card: the red
 // GEESLING label, Pixelify Sans field labels, each suggestion in a white box like the form's inputs, small VT323
-// print, and a red Save-style button beside a paper one. The scene is two images on geesling.ca (public/email), drawn
+// print, and a red Save-style button beside a paper one. The scene is two images on geesling.ca (public/email-sky.png, public/email-skyline.png), drawn
 // from the app's own backdrop; everything with words is real text. Fonts: VT323 for text, Pixelify Sans for labels
 // (Google Fonts; clients that block web fonts fall back to monospace).
 // Accessibility (WCAG 2.2 AA, as far as email allows): lang="en", layout tables marked role="presentation", decorative
@@ -54,7 +54,7 @@ const C = {
 const TEXT = "'VT323', 'Courier New', monospace";
 const LABEL = "'Pixelify Sans', 'Courier New', monospace";
 export const CONTACT_EMAIL = "geeslingthegoose@outlook.com";
-const ART = "https://geesling.ca/email";
+const ART = "https://geesling.ca"; // email-sky.png and email-skyline.png sit at the top level (Expo hosting doesn't serve public/ subfolders)
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -114,7 +114,7 @@ export function renderEmail(content: EmailContent, unsubscribeUrl: string): { ht
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(content.preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.sky};"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
-<tr><td><img src="${ART}/sky.png" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0;"></td></tr>
+<tr><td><img src="${ART}/email-sky.png" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0;"></td></tr>
 <tr><td style="padding:0 16px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.paper};border:4px solid ${C.ink};box-shadow:6px 6px 0 ${C.ink};"><tr><td style="padding:18px 18px 20px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;"><tr>
@@ -132,7 +132,7 @@ ${button("https://geesling.ca/?from=email", "Open the live map", false)}
 </tr></table>
 </td></tr></table>
 </td></tr>
-<tr><td style="padding-top:18px;"><img src="${ART}/skyline.png" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0;"></td></tr>
+<tr><td style="padding-top:18px;"><img src="${ART}/email-skyline.png" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0;"></td></tr>
 <tr><td align="center" style="padding:14px 20px 24px;font-family:${TEXT};font-size:17px;line-height:1.25;color:${C.inkSoft};">
 You're getting this because you ticked "Send me Geesling updates" on geesling.ca.<br>
 <a href="${escapeHtml(unsubscribeUrl)}" style="color:${C.ink};text-decoration:underline;">Unsubscribe from Geesling emails</a><br>
