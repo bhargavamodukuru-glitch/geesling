@@ -1,0 +1,23 @@
+name: Push alerts
+
+# Geesling's heads-ups: 8:30 am daily and 5 pm on weekdays, Toronto time. GitHub schedules run in UTC, so each alert
+# has one run for daylight time (EDT, UTC-4) and one for standard time (EST, UTC-5); the function sends only when it's
+# the right Toronto hour, and at most once a day (supabase/functions/push-alerts).
+on:
+  schedule:
+    - cron: "30 12,13 * * *" # 8:30 am Toronto (EDT / EST)
+    - cron: "0 21,22 * * 1-5" # 5:00 pm Toronto (EDT / EST), weekdays
+  workflow_dispatch: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send the alert that's due
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl --fail-with-body -sS -X POST "$SUPABASE_URL/functions/v1/push-alerts" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" -d '{}'

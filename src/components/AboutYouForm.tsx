@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { PixelButton } from "@/components/Pixel";
-import { saveProfile } from "@/lib/account";
+import { deleteProfile, saveProfile } from "@/lib/account";
+import { askPushPermission, disablePush, enablePush, pushSupported } from "@/lib/push";
 import { AGE_RANGES, PERSONAS, cleanEmail, cleanPhone, type AgeRange, type Persona, type Profile } from "@/lib/profile";
 import { colors, fonts, text } from "@/lib/theme";
 
@@ -12,10 +13,12 @@ interface Props {
   onSaved: () => void;
   /** A second, quieter button beside Save (Cancel when editing, Skip for now on the opening screen). */
   secondary?: { label: string; onPress: () => void };
+  /** Called once saved details are deleted (offered only when `initial` holds saved details). */
+  onDeleted?: () => void;
 }
 
 /** The "about you" questions: email, phone, what brings them to Toronto, age range and the updates opt-in. */
-export function AboutYouForm({ initial = null, onSaved, secondary }: Props) {
+export function AboutYouForm({ initial = null, onSaved, secondary, onDeleted }: Props) {
   const [emailInput, setEmailInput] = useState(initial?.email ?? "");
   const [phoneInput, setPhoneInput] = useState(initial?.phone ?? "");
   const [persona, setPersona] = useState<Persona | null>(initial?.persona ?? null);
@@ -23,8 +26,11 @@ export function AboutYouForm({ initial = null, onSaved, secondary }: Props) {
   const [marketing, setMarketing] = useState(initial?.marketing_opt_in ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const save = async () => {
+    // Ask for notification permission right away, while this still counts as the tap (browsers require that).
+    const permission = marketing && pushSupported() ? askPushPermission() : null;
     setBusy(true);
     setError(null);
     try {
@@ -33,10 +39,27 @@ export function AboutYouForm({ initial = null, onSaved, secondary }: Props) {
       const phone = cleanPhone(phoneInput);
       if (!phone) throw new Error("Enter a phone number, e.g. 416 555 0199.");
       await saveProfile({ email, phone, persona, ageRange, marketing });
+      // Notifications follow the box: on if ticked and the browser allows them, off (and forgotten) if not.
+      // A problem here never blocks saving the details.
+      if (permission) await enablePush(await permission).catch(() => false);
+      else if (!marketing) await disablePush().catch(() => {});
       onSaved();
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await disablePush().catch(() => {});
+      await deleteProfile();
+      onDeleted?.();
+    } catch (e) {
+      setError((e as Error).message);
       setBusy(false);
     }
   };
@@ -52,15 +75,34 @@ export function AboutYouForm({ initial = null, onSaved, secondary }: Props) {
           <PixelButton key={a.id} label={a.label} small active={ageRange === a.id} onPress={() => setAgeRange(ageRange === a.id ? null : a.id)} />
         ))}
       </View>
-      <Check checked={marketing} label="Send me Geesling updates by email or text (optional)" onToggle={() => setMarketing(!marketing)} />
+      <Check checked={marketing} label="Send me Geesling updates by email, text or notification (optional)" onToggle={() => setMarketing(!marketing)} />
+      {marketing && pushSupported() ? (
+        <Text style={text.small}>Your browser will ask to allow notifications: a heads-up at 8:30 am and, on weekdays, at 5 pm.</Text>
+      ) : null}
       <Text style={text.small}>
-        We use your details to understand who uses Geesling, and to send updates only if you tick the box. We never sell them, and you can delete them any time.
+        We use your details to understand who uses Geesling, and to send updates only if you tick the box. We never sell them, and you can delete them any time{initial ? " (below)" : " from this form"}.
       </Text>
       {error ? <Text style={styles.error} accessibilityLiveRegion="assertive">{error}</Text> : null}
       <View style={styles.actions}>
         <PixelButton label={busy ? "Saving…" : "Save"} tone="red" disabled={busy} onPress={() => void save()} />
         {secondary ? <PixelButton label={secondary.label} small disabled={busy} onPress={secondary.onPress} /> : null}
       </View>
+      {/* Saved details can always be deleted here: email, phone, answers, and any notifications. */}
+      {initial ? (
+        confirmDelete ? (
+          <View style={styles.confirm} accessibilityLiveRegion="polite">
+            <Text style={text.small}>Delete your email, phone and answers, and stop all updates?</Text>
+            <View style={styles.actions}>
+              <PixelButton label={busy ? "Deleting…" : "Yes, delete"} tone="red" small disabled={busy} onPress={() => void remove()} />
+              <PixelButton label="Keep them" small disabled={busy} onPress={() => setConfirmDelete(false)} />
+            </View>
+          </View>
+        ) : (
+          <Pressable onPress={() => setConfirmDelete(true)} accessibilityRole="button" hitSlop={8}>
+            <Text style={styles.deleteLink}>Delete my details</Text>
+          </Pressable>
+        )
+      ) : null}
     </View>
   );
 }
@@ -166,5 +208,7 @@ const styles = StyleSheet.create({
   boxOn: { backgroundColor: colors.freeDark },
   tick: { color: colors.white, fontFamily: fonts.heading, fontSize: 14, lineHeight: 16 },
   error: { fontFamily: fonts.body, fontSize: 18, color: colors.accent },
+  confirm: { gap: 8, borderWidth: 2, borderColor: colors.accent, padding: 10, backgroundColor: colors.paper },
+  deleteLink: { fontFamily: fonts.body, fontSize: 17, color: colors.accent, textDecorationLine: "underline" },
   actions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
 });

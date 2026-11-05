@@ -431,7 +431,7 @@ export function HatchIntro({ nightMode, now, onToggleTheme, onReveal, onDone, on
                       </View>
                     ) : null}
                     {/* Keyed so details that arrive after the form opened still fill it in. */}
-                    <AboutYouForm key={profile ? "known" : "new"} initial={profile} onSaved={leaveForm} secondary={{ label: "Skip for now", onPress: leaveForm }} />
+                    <AboutYouForm key={profile ? "known" : "new"} initial={profile} onSaved={leaveForm} onDeleted={leaveForm} secondary={{ label: "Skip for now", onPress: leaveForm }} />
                   </ScrollView>
                 )}
               </Panel>
