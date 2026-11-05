@@ -44,3 +44,6 @@ yarn-error.*
 ingest-preview.json
 city-spots-preview.json
 .env
+
+# Resend setup key (full access, for the one-time agent setup only; delete after)
+.env.resend-agent
